@@ -157,7 +157,7 @@ Sub StartMegaCapture()
                     'exit if stop button has been clicked
                     'this doesn't work inside this subroutine
                     If Not doImage Then GoTo EndLabel
-                    'Do I want this in here?  I might want Stop to only stop at the end of a set of tiles
+                    'Do I want this in here?  I might want Stop to only stop at the end of a timepoint
                 Next SpecimenColumnIndex
             Next SpecimenRowIndex
         End If
@@ -202,27 +202,10 @@ EndLabel:
     'If PNGs are desired, convert here
     If (OptionPNG8.Value Or OptionPNG12.Value) Then
     ' convert tifs to pngs using ImageMagick
-        'Shell ("for f in poop*.tif")
-        'Shell ("do convert $f $f.png")
-        'Shell ("done")
-        'Dim ShellId As Long
-        'cmd1 = "cd " + PathOfFolderForImagesText
-        'MsgBox (cmd1)
-        'cmd2 = "FOR %a in (*.tif) DO convert %a %a.png"
         'MsgBox ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
         Shell ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
-        'MsgBox (cmd2)
-        'Shell "cmd.exe /C " + cmd1 + " /C " + cmd2
-        'Shell "cmd /C cd "" + PathOfFolderForImagesText /C "
-        'Shell ("cd " + PathOfFolderForImagesText)
-        'Shell "FOR %a in (*.tif) DO convert %a %a.png"
-        'Shell (find . -name "*tif" | xargs -l -i basename -s ".tif" "{}" | xargs -l -i convert "{}.tif" "{}.png")
-'        Shell ("convertmagick " + "*.tif " + "*.png")
     ElseIf (OptionTiff8.Value Or OptionTiff12.Value) Then
         Shell ("mogrify -colorspace Gray -format tif " + PathOfFolderForImagesText + "*.tif")
-        'Shell "cmd.exe /C notepad.exe"
-        'Shell ("cd " + PathOfFolderForImagesText)
-        'Shell "FOR %a in (*.tif) DO convert %a %a.tif"
     End If
     
     'If PNGs are desired, convert here
@@ -865,7 +848,7 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             
             'Capture each z-stack
             For zInd = 0 To NumberOfZSlicesText - 1
-                Lsm5.Hardware.CpFocus.Position = zPos - CDbl(zInd * ZSliceSpacingText) / 1000 'Added this
+                Lsm5.Hardware.CpFocus.Position = zPos + CDbl(zInd * ZSliceSpacingText) / 1000 'Added this
                 While Lsm5.Hardware.CpFocus.IsBusy()
                     Sleep (100)
                 Wend
