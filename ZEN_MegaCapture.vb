@@ -88,7 +88,7 @@ Sub StartMegaCapture()
     Close #intOutFileUsr
     Open strOutFileUsr For Output As #intOutFileUsr
     'This is where sTab used to have its Dim and its sTab = Chr(9) 'tab
-
+    
     finishedHeader = False
     
     'Enable nudging buttons
@@ -142,23 +142,23 @@ Sub StartMegaCapture()
                 'Capture columns of specimens
                 For SpecimenColumnIndex = 0 To ColumnsOfSpecimensText - 1
                     If (OptionUL) Then
-                        yInput = startX + SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) + CDbl(XOffsetText)
-                        xInput = startY - SpecimenRowIndex * CDbl(DistanceBetweenRowsText) - CDbl(YOffsetText)
+                        yInput = startX + SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText)
+                        xInput = startY - SpecimenRowIndex * CDbl(DistanceBetweenRowsText)
                     End If
         
                     If (OptionUR) Then
-                        xInput = startX - SpecimenColumnIndex * CInt(DistanceBetweenColumnsText) - CInt(XOffsetText)
-                        yInput = startY + SpecimenRowIndex * CInt(DistanceBetweenRowsText) + CInt(YOffsetText)
+                        xInput = startX - SpecimenColumnIndex * CInt(DistanceBetweenColumnsText)
+                        yInput = startY + SpecimenRowIndex * CInt(DistanceBetweenRowsText)
                     End If
         
                     If (OptionLL) Then
-                         yInput = startX - SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) - CDbl(XOffsetText)
-                         xInput = startY + SpecimenRowIndex * CDbl(DistanceBetweenRowsText) + CDbl(YOffsetText)
+                         yInput = startX - SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText)
+                         xInput = startY + SpecimenRowIndex * CDbl(DistanceBetweenRowsText)
                     End If
         
                     If (OptionLR) Then
-                        xInput = startX + SpecimenColumnIndex * CInt(DistanceBetweenColumnsText) + CInt(XOffsetText)
-                        yInput = startY - SpecimenRowIndex * CInt(DistanceBetweenRowsText) - CInt(YOffsetText)
+                        xInput = startX + SpecimenColumnIndex * CInt(DistanceBetweenColumnsText)
+                        yInput = startY - SpecimenRowIndex * CInt(DistanceBetweenRowsText)
                     End If
                     Call AcquireTiledZStack(xInput, yInput, ArrayTopZ) 'Just put yInput in again so I would have a double
                     'exit if stop button has been clicked
@@ -288,6 +288,10 @@ End Sub
 Private Sub HelpButton_Click()
     HelpForm.Show
 End Sub
+
+
+
+
 
 
 Private Sub MarkAndFind_Click()
@@ -713,30 +717,29 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             
             'Move stage
             If (OptionUL) Then
-                Lsm5.Hardware.CpStages.PositionY = xPos + XTilesIndex * FOV
-                Lsm5.Hardware.CpStages.PositionX = yPos - YTilesIndex * FOV
+                Lsm5.Hardware.CpStages.PositionY = xPos + XTilesIndex * FOV + CDbl(XOffsetText)
+                Lsm5.Hardware.CpStages.PositionX = yPos - YTilesIndex * FOV - CDbl(YOffsetText)
             End If
 
             If (OptionUR) Then
-                Lsm5.Hardware.CpStages.PositionX = xPos - XTilesIndex * FOV
-                Lsm5.Hardware.CpStages.PositionY = yPos + YTilesIndex * FOV
+                Lsm5.Hardware.CpStages.PositionX = xPos - XTilesIndex * FOV - CInt(XOffsetText)
+                Lsm5.Hardware.CpStages.PositionY = yPos + YTilesIndex * FOV + CInt(YOffsetText)
             End If
 
             If (OptionLL) Then
-                 Lsm5.Hardware.CpStages.PositionY = xPos - XTilesIndex * FOV
-                 Lsm5.Hardware.CpStages.PositionX = yPos + YTilesIndex * FOV
+                 Lsm5.Hardware.CpStages.PositionY = xPos - XTilesIndex * FOV - CDbl(XOffsetText)
+                 Lsm5.Hardware.CpStages.PositionX = yPos + YTilesIndex * FOV + CDbl(YOffsetText)
             End If
 
             If (OptionLR) Then
-                Lsm5.Hardware.CpStages.PositionX = xPos + XTilesIndex * FOV
-                Lsm5.Hardware.CpStages.PositionY = yPos - YTilesIndex * FOV
+                Lsm5.Hardware.CpStages.PositionX = xPos + XTilesIndex * FOV + CInt(XOffsetText)
+                Lsm5.Hardware.CpStages.PositionY = yPos - YTilesIndex * FOV - CInt(YOffsetText)
             End If
             
             'Wait till stage is finished moving
             While Lsm5.Hardware.CpStages.IsBusy()
                 Sleep (100)
             Wend
-            
             
             'Acquire single z-slice
             Dim RecordingDoc As DsRecordingDoc
@@ -906,7 +909,7 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             
             'Capture each z-stack
             For zInd = 0 To NumberOfZSlicesText - 1
-                Lsm5.Hardware.CpFocus.Position = zPos + CDbl(zInd * ZSliceSpacingText) / 1000 'Added this
+                Lsm5.Hardware.CpFocus.Position = zPos + CDbl(zInd * ZSliceSpacingText) / 1000 + CDbl(ZOffsetText) 'Added this
                 While Lsm5.Hardware.CpFocus.IsBusy()
                     Sleep (100)
                 Wend
@@ -963,6 +966,9 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                     Print #intOutFileUsr, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
                     Print #intOutFileUsr, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
                     Print #intOutFileUsr, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
+                    Print #intOutFileUsr, "OffsetX" + sTab + XOffsetText
+                    Print #intOutFileUsr, "OffsetY" + sTab + YOffsetText
+                    Print #intOutFileUsr, "OffsetZ" + sTab + ZOffsetText
                     Print #intOutFileUsr, "</Image>"
                 Next channel
                 'Print #intOutFileMeg, ""
