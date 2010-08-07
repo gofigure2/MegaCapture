@@ -20,6 +20,7 @@ Dim blueChannel As Integer
 Dim Recording As DsRecording
 'Dim RecordingDoc As DsRecordingDoc 'difference from previous version
 Dim ArrayTopZ As Double
+Dim ArrayTopZSet As Boolean
 Dim FOV As Integer
 
 Dim sTab As String
@@ -45,6 +46,11 @@ Private Declare Function SHBrowseForFolder Lib "shell32.dll" _
     Alias "SHBrowseForFolderA" (lpBrowseInfo As BROWSEINFO) As Long
     
 Sub StartMegaCapture()
+    
+    'If there was no top z-slice set for the array, use the current z position
+    If (Not ArrayTopZSet) Then
+        ArrayTopZ = Lsm5.Hardware.CpFocus.Position
+    End If
     
     Dim Track As DsTrack
     Dim laser As DsLaser
@@ -179,10 +185,7 @@ EndLabel:
     StartButton.Enabled = True
     
     Close #intOutFile
-    
-    'TODO move png conversion code here
-    'TODO getting grayscale tifs
-    
+            
     Set Track = Nothing
     Set laser = Nothing
     Set DetectionChannel = Nothing
@@ -191,6 +194,36 @@ EndLabel:
     Set BeamSplitter = Nothing
     Set Timers = Nothing
     Set Markers = Nothing
+    Dim ShellId As Long
+    Dim ShellState As Long
+    Dim cmd1 As String
+    Dim cmd2 As String
+    
+    'If PNGs are desired, convert here
+    If (OptionPNG8.Value Or OptionPNG12.Value) Then
+    ' convert tifs to pngs using ImageMagick
+        'Shell ("for f in poop*.tif")
+        'Shell ("do convert $f $f.png")
+        'Shell ("done")
+        'Dim ShellId As Long
+        'cmd1 = "cd " + PathOfFolderForImagesText
+        'MsgBox (cmd1)
+        'cmd2 = "FOR %a in (*.tif) DO convert %a %a.png"
+        'MsgBox ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
+        Shell ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
+        'MsgBox (cmd2)
+        'Shell "cmd.exe /C " + cmd1 + " /C " + cmd2
+        'Shell "cmd /C cd "" + PathOfFolderForImagesText /C "
+        'Shell ("cd " + PathOfFolderForImagesText)
+        'Shell "FOR %a in (*.tif) DO convert %a %a.png"
+        'Shell (find . -name "*tif" | xargs -l -i basename -s ".tif" "{}" | xargs -l -i convert "{}.tif" "{}.png")
+'        Shell ("convertmagick " + "*.tif " + "*.png")
+    ElseIf (OptionTiff8.Value Or OptionTiff12.Value) Then
+        Shell ("mogrify -colorspace Gray -format tif " + PathOfFolderForImagesText + "*.tif")
+        'Shell "cmd.exe /C notepad.exe"
+        'Shell ("cd " + PathOfFolderForImagesText)
+        'Shell "FOR %a in (*.tif) DO convert %a %a.tif"
+    End If
     
     'If PNGs are desired, convert here
 '    If (OptionPNG8.Value Or OptionPNG12.Value) Then
@@ -223,9 +256,6 @@ Private Sub BrowseButton_Click()
     FolderName = GetFolderName("Select a folder")
     If FolderName <> "" Then PathOfFolderForImagesText = FolderName
 End Sub
-
-
-
 
 Private Sub ColumnsOfSpecimensSpin_Change()
     ColumnsOfSpecimensText = ColumnsOfSpecimensSpin
@@ -268,11 +298,6 @@ Private Sub HelpButton_Click()
 End Sub
 
 
-
-Private Sub Label25_Click()
-
-End Sub
-
 Private Sub MarkAndFind_Click()
     
     If MarkAndFind Then 'If you're checking the Use Mark & Find box
@@ -293,14 +318,6 @@ Private Sub MarkAndFind_Click()
         DistanceBetweenColumnsText.BackColor = &H80000013
         DistanceBetweenColumnsSpin.Enabled = False
         
-        'NumberOfZSlicesText.Enabled = True
-        'NumberOfZSlicesText.BackColor = &H8000000F
-        'NumberOfZSlicesSpin.Enabled = True
-        
-        'ZSliceSpacingText.Enabled = True
-        'ZSliceSpacingText.BackColor = &H8000000F
-        'ZSliceSpacingSpin.Enabled = True
-        
         SetTopZ.Enabled = False
         
     Else 'If you're unchecking the Use Mark & Find box
@@ -320,14 +337,6 @@ Private Sub MarkAndFind_Click()
         DistanceBetweenColumnsText.Enabled = True
         DistanceBetweenColumnsText.BackColor = &H8000000F
         DistanceBetweenColumnsSpin.Enabled = True
-        
-        'NumberOfZSlicesText.Enabled = False
-        'NumberOfZSlicesText.BackColor = &H80000013
-        'NumberOfZSlicesSpin.Enabled = False
-        
-        'ZSliceSpacingText.Enabled = False
-        'ZSliceSpacingText.BackColor = &H80000013
-        'ZSliceSpacingSpin.Enabled = False
         
         SetTopZ.Enabled = True
         
@@ -368,6 +377,7 @@ End Sub
 
 Private Sub SetTopZ_Click()
     ArrayTopZ = Lsm5.Hardware.CpFocus.Position
+    ArrayTopZSet = True
 End Sub
 
 Private Sub StartButton_Click()
@@ -703,12 +713,11 @@ End Sub
 'Sub because I don't want it to return a value.  Will need to use Call when calling this Sub
 Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
     sTab = Chr(9) 'tab
-    'Capture y tiles per specimen
     
+    'Capture y tiles per specimen
     For YTilesIndex = 0 To YTilesPerSpecimenText - 1
         'Capture x tiles per specimen
         For XTilesIndex = 0 To XTilesPerSpecimenText - 1
-            
             
             'Move stage
             If (OptionUL) Then
@@ -737,7 +746,7 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             Wend
             
             
-            'Acquire single image
+            'Acquire single z-slice
             Dim RecordingDoc As DsRecordingDoc
             Lsm5.Hardware.CpFocus.Position = zPos 'Added this
             While Lsm5.Hardware.CpFocus.IsBusy()
@@ -748,8 +757,7 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 DoEvents
                 Sleep 200
             Wend
-            'save LSM file here
-            ' TODO should also r
+            'TODO - Save LSM file here
             
             'Determine size of field of view in microns
             If (FOV = 0) Then
@@ -757,8 +765,11 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             End If
             
             Dim channel As Integer
-            'Added this to see if I can get channel name
-            'Set DataChannel = Track.DataChannelObjectByChannel(10, Success)
+            Dim SuccessChan As Integer
+            Dim Pinhole As Double
+            Dim amplifier As CpAmplifiers
+            Set amplifier = Lsm5.Hardware.CpAmplifiers
+                
             If Not finishedHeader Then
                 'Write header for .meg
                 Print #intOutFile, "MegaCapture"
@@ -787,10 +798,20 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 Print #intOutFile, "DimensionTM" + sTab + TimePointsText
                 Print #intOutFile, "DimensionZS" + sTab + CStr(NumberOfZSlicesText)
                 Print #intOutFile, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
+                Print #intOutFile, ""
                 For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                    Pinhole = Lsm5.Hardware.CpPinholes.Diameter
+                    amplifier.Select (channel)
                     Print #intOutFile, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
-                    ' TODO record channel name.  Not working yet
-                    'Print #intOutFile, "ChannelName" + DataChannel.DyeName
+                    ' TODO record channel name (not just dye)
+                    ' TODO should also record digital offset and wavelength
+                    Print #intOutFile, "Pinhole" + sTab + CStr(Pinhole)
+                    'TODO need to add laser attenuation for active lasers and amplifier gain/offset for current channel
+                    Print #intOutFile, "DigitalGain" + sTab + CStr(amplifier.Gain)
+                    Set DetectionChannel = Lsm5.DsRecording.DetectionChannelOfActiveOrder(channel, SuccessChan)
+                    Print #intOutFile, "MasterGain" + sTab + CStr(DetectionChannel.DetectorGain)
+                    Print #intOutFile, "DyeName" + sTab + CStr(DetectionChannel.DyeName)
+                    Print #intOutFile, ""
                 Next channel
                 
                 Dim strDepth, strFileType As String
@@ -811,7 +832,9 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 Print #intOutFile, "ChannelDepth" + sTab + strDepth
                 Print #intOutFile, "FileType" + sTab + strFileType
                 Print #intOutFile, "</ImageSessionData>"
-
+                Print #intOutFile, ""
+                Print #intOutFile, "------------------------------------------------------"
+                Print #intOutFile, ""
                 finishedHeader = True
             End If
         
@@ -840,7 +863,7 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                   + "-TM" + Format(TimeIndex, "0000")
             End If
             
-            'Capture z-stack
+            'Capture each z-stack
             For zInd = 0 To NumberOfZSlicesText - 1
                 Lsm5.Hardware.CpFocus.Position = zPos - CDbl(zInd * ZSliceSpacingText) / 1000 'Added this
                 While Lsm5.Hardware.CpFocus.IsBusy()
@@ -852,20 +875,6 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                     DoEvents
                     Sleep 200
                 Wend
-                
-                'Dim strZ As String
-                ''Used to say RecordingDoc.GetDimensionZ instead of NumberOfZSlicesText (because it used to be doing the z-stack through ZEN)
-                'If NumberOfZSlicesText = 1 Then
-                '   strZ = "0000"
-                'ElseIf NumberOfZSlicesText < 10 Then
-                '   strZ = "000"
-                'ElseIf NumberOfZSlicesText < 100 Then
-                '   strZ = "00"
-                'ElseIf NumberOfZSlicesText < 1000 Then
-                '   strZ = "0"
-                'Else
-                '   strZ = ""
-                'End If
                 
                 'Choose settings for file export
                 Dim nExportType As Integer
@@ -888,68 +897,26 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
     
                 DoEvents
                 
-                'Write a line in .meg file for each image in z-series
-                sTab = Chr(9) 'tab
-                Dim Pinhole As Double
-                'Lsm5.Hardware.CpPinholes.Select (1)
-                
-                Dim amplifier As CpAmplifiers
-                Set amplifier = Lsm5.Hardware.CpAmplifiers
-                Dim laserlines As CpLaserLines
-                Set laserlines = Lsm5.Hardware.CpLaserLines
-                Dim wavelength As Long
-                Dim attenuation As Double
-                Dim onoff As Integer
-                Dim lasername As String
-                Dim lasercount As Long
-                Dim laserindex As Long
-                
-                Dim laser As CpLasers
-                Set laser = Lsm5.Hardware.CpLasers
-                
-                'laserlines.LineInfo channel, wavelength, attenuation, onoff, lasername
-                'lasercount = laserlines.Count
-                'For laserindex = 0 To lasercount - 1
-                '    laserlines.LineInfo laserindex, wavelength, attenuation, onoff, lasername
-                '    Print #intOutFile, "Laser Wavelength" + sTab + CStr(wavelength)
-                '    Print #intOutFile, "Attenuation" + sTab + CStr(attenuation)
-                '    Print #intOutFile, "Laser Source" + sTab + CStr(lasername)
-                '    Print #intOutFile, "onoff" + sTab + CStr(onoff)
-                '    Print #intOutFile, "on or off" + sTab + CStr(laserlines.IsLaserOn(wavelength))
-                '    laser.Select (laserindex)
-                '    Print #intOutFile, "laser state" + sTab + CStr(laser.State)
-                '
-                'Next laserindex
-                
+                'Export .lsm files as TIFFs and write a line in .meg file for each image in z-series
+                'Will conver to PNG files later if desired
                 Dim strName As String
-                Dim SuccessChan As Integer
-                'Dim TS As DsTrack
-                Dim SuccessLaser As Integer
-                
-                
-                'export as tifs first, convert later if png
                 For channel = 0 To RecordingDoc.GetDimensionChannels - 1
                     strName = strFilename + "-CH" + Format(channel, "00") + "-ZS"
                     Success = RecordingDoc.Export(nExportType, strName + Format(zInd, "0000") + ".tif", True, False, 0, 0, True, channel, channel, channel)
-' TODO should also record(master gain, digital offset and digital gain)
-                    Pinhole = Lsm5.Hardware.CpPinholes.Diameter
-                    'DetectorGain = Lsm5.Hardware.CpPmts.Gain
-                    amplifier.Select (channel)
-                    'laserlines.LineInfo channel, wavelength, attenuation, onoff, laser
-                    'If
-                    'Lsm5.Hardware.CpPmts.Select (channel + 1)
+                    'TODO getting grayscale tifs
+
                     strName = strFilename + "-CH" + Format(channel, "00") + "-ZS" + Format(zInd, "0000") + strExtension
-                
+                    'has to be done in two separate lines like this so that images will be .tif at first no matter what
+                    
                     Print #intOutFile, "<Image>"
-                
                     Print #intOutFile, "Filename" + sTab + strName
                     Print #intOutFile, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
                     Print #intOutFile, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
                     Print #intOutFile, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
                     Print #intOutFile, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
                     Print #intOutFile, "</Image>"
-                    'Lsm5.DsRecording.
                 Next channel
+                Print #intOutFile, ""
                 
                 'free up memory?
                 RecordingDoc.CloseAllWindows
@@ -958,10 +925,12 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 'TODO is memory leak still a problem? if so does this line help?
                
             Next zInd
-            
                                 
         Next XTilesIndex
     Next YTilesIndex
+    
+    Print #intOutFile, "------------------------------------------------------"
+    Print #intOutFile, ""
                 
 End Sub
 
