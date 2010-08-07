@@ -7,6 +7,8 @@ Dim TimeIndex As Integer
 Dim SpecimenRowIndex As Integer
 Dim SpecimenColumnIndex As Integer
 Dim SpecimenPositionIndex As Integer 'Paul added this
+Dim FolderIndex As Integer 'Paul added this
+Dim TotalNumberOfFolders As Integer 'Paul added this
 Dim PositionsOfSpecimens As Long 'Long, which I think was Sean's idea or I took because ColumnsOfSpecimens was Long
 Dim XTilesIndex As Integer
 Dim YTilesIndex As Integer
@@ -107,16 +109,30 @@ Sub StartMegaCapture()
     strFilename = ""
     FOV = 0 'had removed this, just added it back
             
+    If MarkAndFind Then
+        Dim MyXpos() As Double
+        Dim MyYpos() As Double
+        Dim MyZpos() As Double
+        PositionsOfSpecimens = GetMarkedLocations(MyXpos(), MyYpos(), MyZpos()) 'Do I need xPos() instead?  I think I did
+        TotalNumberOfFolders = PositionsOfSpecimens * CInt(XTilesPerSpecimenText) * CInt(YTilesPerSpecimenText)
+    Else
+        TotalNumberOfFolders = RowsOfSpecimensText * ColumnsOfSpecimensText * YTilesPerSpecimenText * XTilesPerSpecimenText
+    End If
+    
+    For FolderIndex = 0 To TotalNumberOfFolders - 1
+        'MsgBox (CStr(FolderIndex))
+        MkDir (PathOfFolderForImagesText + "Location" + CStr(FolderIndex))
+    Next FolderIndex
+    
+    'Reset FolderIndex
+    FolderIndex = 0
+    
     'Capture time points
     For TimeIndex = 0 To TimePointsText.Value - 1
        TimePointStartTime = Now()
        
         If MarkAndFind Then
         
-            Dim MyXpos() As Double
-            Dim MyYpos() As Double
-            Dim MyZpos() As Double
-            PositionsOfSpecimens = GetMarkedLocations(MyXpos(), MyYpos(), MyZpos()) 'Do I need xPos() instead?  I think I did
             For SpecimenPositionIndex = 0 To PositionsOfSpecimens - 1
                 'Even though AcquireTiledZStack is a Sub in your example code, VB doesn 't differentiate between the calling syntax of a Sub
                 'and a Function. Regardless of whether the procedure you're calling is a Sub or a Function, if you use parentheses and don't
@@ -188,7 +204,6 @@ EndLabel:
     Lsm5.Hardware.CpStages.PositionX = startX
     Lsm5.Hardware.CpStages.PositionY = startY
     
-    StopButton.Enabled = False
     'StartButton.Enabled = True
     
     Close #intOutFileMeg
@@ -206,17 +221,35 @@ EndLabel:
     Dim ShellState As Long
     Dim cmd1 As String
     Dim cmd2 As String
+    Dim IncrementedPathOfFolderForImages As String
     
-    'If PNGs are desired, convert here
+    'Turn tifs grayscale if you want TIF files, or turn tifs to pngs if you want PNG files
+    For FolderIndex = 0 To TotalNumberOfFolders - 1
+        IncrementedPathOfFolderForImages = PathOfFolderForImagesText + "Location" + CStr(FolderIndex) + "\"
+        'MsgBox (IncrementedPathOfFolderForImages)
+        'If PNGs are desired, convert here
+        If (OptionPNG8.Value Or OptionPNG12.Value) Then
+        ' convert tifs to pngs using ImageMagick
+            'MsgBox ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
+            'Antonin - this is an example shell call
+            Shell ("mogrify -colorspace Gray -format png " + IncrementedPathOfFolderForImages + "*.tif")
+        ElseIf (OptionTiff8.Value Or OptionTiff12.Value) Then
+            Shell ("mogrify -colorspace Gray -format tif " + IncrementedPathOfFolderForImages + "*.tif")
+        End If
+        
+        Sleep 1000
+    Next FolderIndex
+    
+    Sleep 2000
+    'Delete the TIF files used to generate the PNG files, if this option is selected
     If (OptionPNG8.Value Or OptionPNG12.Value) Then
-    ' convert tifs to pngs using ImageMagick
-        'MsgBox ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
-        'Antonin - this is an example shell call
-        Shell ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
-    ElseIf (OptionTiff8.Value Or OptionTiff12.Value) Then
-        Shell ("mogrify -colorspace Gray -format tif " + PathOfFolderForImagesText + "*.tif")
+        For FolderIndex = 0 To TotalNumberOfFolders - 1
+            IncrementedPathOfFolderForImages = PathOfFolderForImagesText + "Location" + CStr(FolderIndex) + "\"
+            Kill (IncrementedPathOfFolderForImages + "*.tif")
+        Next FolderIndex
     End If
     
+    StopButton.Enabled = False
     'If PNGs are desired, convert here
 '    If (OptionPNG8.Value Or OptionPNG12.Value) Then
 '        ' convert tifs to pngs using ImageMagick
@@ -247,6 +280,11 @@ Private Sub BrowseButton_Click()
     Dim FolderName As String
     FolderName = GetFolderName("Select a folder")
     If FolderName <> "" Then PathOfFolderForImagesText = FolderName
+    Dim retval As String
+    retval = Dir$(PathOfFolderForImagesText + "*.*")
+    If retval <> "" Then
+        MsgBox "This folder already contains files.  You should consider using an empty folder!"
+    End If
 End Sub
 
 Private Sub ColumnsOfSpecimensSpin_Change()
@@ -789,8 +827,8 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                     Print #intOutFileMeg, "DimensionRO" + sTab + "1"
                 End If
                 Print #intOutFileMeg, "DimensionZT" + sTab + "1"
-                Print #intOutFileMeg, "DimensionYT" + sTab + YTilesPerSpecimenText
-                Print #intOutFileMeg, "DimensionXT" + sTab + XTilesPerSpecimenText
+                Print #intOutFileMeg, "DimensionYT" + sTab + "1"
+                Print #intOutFileMeg, "DimensionXT" + sTab + "1"
                 Print #intOutFileMeg, "DimensionTM" + sTab + TimePointsText
                 Print #intOutFileMeg, "DimensionZS" + sTab + CStr(NumberOfZSlicesText)
                 Print #intOutFileMeg, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
@@ -887,6 +925,9 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             'p is for plate number but can't switch plates on cyclops
             If MarkAndFind Then
                 strFilename = PathOfFolderForImagesText _
+                  + "Location" _
+                  + CStr(FolderIndex) _
+                  + "\" _
                   + FilenamePrefixText _
                   + "-PL00" _
                   + "-CO" + Format(SpecimenPositionIndex, "00") _
@@ -897,6 +938,9 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                   + "-TM" + Format(TimeIndex, "0000")
             Else
                 strFilename = PathOfFolderForImagesText _
+                  + "Location" _
+                  + CStr(FolderIndex) _
+                  + "\" _
                   + FilenamePrefixText _
                   + "-PL00" _
                   + "-CO" + Format(SpecimenColumnIndex, "00") _
@@ -934,12 +978,10 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 'Set image file extension name for .meg file
                 Dim strExtension As String
                 If OptionPNG8.Value Or OptionPNG12.Value Then
-                    strExtension = ".tif" 'should be .png, once I get the file conversions implemented
+                    strExtension = ".png" 'should be .png, once I get the file conversions implemented
                 ElseIf OptionTiff8.Value Or OptionTiff12.Value Then
                     strExtension = ".tif" 'bug? should be tif
                 End If
-    
-                DoEvents
                 
                 'Export .lsm files as TIFFs and write a line in .meg file for each image in z-series
                 'Will conver to PNG files later if desired
@@ -980,7 +1022,14 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 'TODO is memory leak still a problem? if so does this line help?
                
             Next zInd
-                                
+            
+            'Paul - this is where you need to keep editing
+            If (FolderIndex < TotalNumberOfFolders - 1) Then
+                FolderIndex = FolderIndex + 1
+            Else
+                FolderIndex = 0
+            End If
+            
         Next XTilesIndex
     Next YTilesIndex
     
