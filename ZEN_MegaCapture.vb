@@ -5,6 +5,7 @@ Dim doImage As Boolean
 Dim TimeIndex As Integer
 Dim SpecimenRowIndex As Integer
 Dim SpecimenColumnIndex As Integer
+Dim SpecimenPositionIndex As Integer 'Paul added this
 Dim XTilesIndex As Integer
 Dim YTilesIndex As Integer
 Dim intOutFile As Integer
@@ -54,7 +55,7 @@ Sub StartMegaCapture()
         
     FOV = 0
     
-    'Create .mgc file to save parameters for all images for importing to GoFigure
+    'Create .meg file to save parameters for all images for importing to GoFigure
     intOutFile = FreeFile
     strOutFile = PathOfFolderForImagesText + FilenamePrefixText + ".meg"
     Close #intOutFile
@@ -68,7 +69,7 @@ Sub StartMegaCapture()
     'Enable nudging buttons
     XOffsetSpin.Enabled = True
     YOffsetSpin.Enabled = True
-    ZOffsetSpin.Enabled = True
+    ZOffsetSpin.Enabled = True 'TODO implement the z-offset
     
     'Remember starting stage position
     startX = Lsm5.Hardware.CpStages.PositionX
@@ -85,222 +86,56 @@ Sub StartMegaCapture()
     For TimeIndex = 0 To TimePointsText.Value - 1
        TimePointStartTime = Now()
        
-        'Capture rows of specimens
-        For SpecimenRowIndex = 0 To RowsOfSpecimensText - 1
-            'Capture columns of specimens
-            For SpecimenColumnIndex = 0 To ColumnsOfSpecimensText - 1
-                'Capture y tiles per specimen
-                For YTilesIndex = 0 To YTilesPerSpecimenText - 1
-                    'Capture x tiles per specimen
-                    For XTilesIndex = 0 To XTilesPerSpecimenText - 1
-                        Dim Recording As DsRecording
-                        Set Recording = Lsm5.DsRecording
-                        Recording.TimeSeries = False
-                        
-                        'Move stage
-                        If (OptionUL) Then
-                            Lsm5.Hardware.CpStages.PositionY = startX + XTilesIndex * FOV + SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) + CDbl(XOffsetText)
-                            Lsm5.Hardware.CpStages.PositionX = startY - YTilesIndex * FOV - SpecimenRowIndex * CDbl(DistanceBetweenRowsText) - CDbl(YOffsetText)
-                        End If
+        If MarkAndFind Then
+        
+            Dim xPos(), yPos(), zPos() As Double
+            Dim PositionsOfSpecimens As Long
+            PositionsOfSpecimens = GetMarkedLocations(xPos, yPos, zPos) 'Do I need xPos() instead?
+            For SpecimenPositionIndex = 1 To PositionsOfSpecimens
+                ConfusingVariable = AcquireTiledZStack(xPos(i), yPos(i), zPos(i))
+                
+                'Do the for loop with position index increasing
+                'For xtile,ytile,z
+            Next SpecimenPositionIndex
+            
+        Else
 
-                        If (OptionUR) Then
-                            Lsm5.Hardware.CpStages.PositionX = startX - XTilesIndex * FOV - SpecimenColumnIndex * CInt(DistanceBetweenColumnsText) - CInt(XOffsetText)
-                            Lsm5.Hardware.CpStages.PositionY = startY + YTilesIndex * FOV + SpecimenRowIndex * CInt(DistanceBetweenRowsText) + CInt(YOffsetText)
-                        End If
- 
-                        If (OptionLL) Then
-                             Lsm5.Hardware.CpStages.PositionY = startX - XTilesIndex * FOV - SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) - CDbl(XOffsetText)
-                             Lsm5.Hardware.CpStages.PositionX = startY + YTilesIndex * FOV + SpecimenRowIndex * CDbl(DistanceBetweenRowsText) + CDbl(YOffsetText)
-                        End If
- 
-                        If (OptionLR) Then
-                            Lsm5.Hardware.CpStages.PositionX = startX + XTilesIndex * FOV + SpecimenColumnIndex * CInt(DistanceBetweenColumnsText) + CInt(XOffsetText)
-                            Lsm5.Hardware.CpStages.PositionY = startY - YTilesIndex * FOV - SpecimenRowIndex * CInt(DistanceBetweenRowsText) - CInt(YOffsetText)
-                        End If
-                        
-                        'Wait till stage is finished moving
-                        While Lsm5.Hardware.CpStages.IsBusy()
-                            Sleep (100)
-                        Wend
-                        
-                        'Capture z-stack
-                        Dim RecordingDoc As DsRecordingDoc
-                        Set RecordingDoc = Lsm5.StartScan()
-                        While RecordingDoc.IsBusy()
-                            DoEvents
-                            Sleep 200
-                        Wend
-                                              
-                        'Determine size of field of view in microns
-                        If (FOV = 0) Then
-                            FOV = RecordingDoc.VoxelSizeX() * RecordingDoc.GetDimensionX() * 1000000 * (100 - CInt(PercentOverlapText)) / 100
-                        End If
-                                                
-                        Dim channel As Integer
-                        If Not finishedHeader Then
-                            'Write header for .mgc
-                            Print #intOutFile, "MegaCapture"
-                            Print #intOutFile, "<ImageSessionData>"
-                            Print #intOutFile, "Version" + sTab + "3.0"
-                            Print #intOutFile, "ExperimentTitle" + sTab + ExperimentTitleText
-                            Print #intOutFile, "ExperimentDescription" + sTab + ExperimentDescriptionText
-                            Print #intOutFile, "TimeInterval" + sTab + TimeIntervalText
-                            Print #intOutFile, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
-                            Print #intOutFile, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX * 10 ^ 9))
-                            Print #intOutFile, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY * 10 ^ 9))
-                            Print #intOutFile, "VoxelSizeZ" + sTab + CStr((RecordingDoc.VoxelSizeZ * 10 ^ 9))
-                            Print #intOutFile, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
-                            Print #intOutFile, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
-                            Print #intOutFile, "DimensionPL" + sTab + "1"
-                            Print #intOutFile, "DimensionCO" + sTab + ColumnsOfSpecimensText
-                            Print #intOutFile, "DimensionRO" + sTab + RowsOfSpecimensText
-                            Print #intOutFile, "DimensionZT" + sTab + "1"
-                            Print #intOutFile, "DimensionYT" + sTab + YTilesPerSpecimenText
-                            Print #intOutFile, "DimensionXT" + sTab + XTilesPerSpecimenText
-                            Print #intOutFile, "DimensionTM" + sTab + TimePointsText
-                            Print #intOutFile, "DimensionZS" + sTab + CStr(RecordingDoc.GetDimensionZ)
-                            Print #intOutFile, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
-                            For channel = 0 To RecordingDoc.GetDimensionChannels - 1
-                                Print #intOutFile, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
-                            Next channel
-                            
-                            Dim strDepth, strFileType As String
-                            If OptionPNG8.Value Then
-                                strDepth = "8"
-                                strFileType = "PNG"
-                            ElseIf OptionPNG12.Value Then
-                                strDepth = "12"
-                                strFileType = "PNG"
-                            ElseIf OptionTiff8.Value Then
-                                strDepth = "8"
-                                strFileType = "TIF"
-                            ElseIf OptionTiff12.Value Then
-                                strDepth = "12"
-                                strFileType = "TIF"
-                            End If
-                            
-                            Print #intOutFile, "ChannelDepth" + sTab + strDepth
-                            Print #intOutFile, "FileType" + sTab + strFileType
-                            Print #intOutFile, "</ImageSessionData>"
-     
-                            finishedHeader = True
-                        End If
-                        
-                        'Set strFilename so can export next round
-                        'Export z-stack in format "prefix-pPPPcCCrRRyYYxXXtTTTTzZZZ
-                        'p is for plate number but can't switch plates on cyclops
-                        strFilename = PathOfFolderForImagesText _
-                          + FilenamePrefixText _
-                          + "-PL00" _
-                          + "-CO" + Format(SpecimenColumnIndex, "00") _
-                          + "-RO" + Format(SpecimenRowIndex, "00") _
-                          + "-ZT00" _
-                          + "-YT" + Format(YTilesIndex, "00") _
-                          + "-XT" + Format(XTilesIndex, "00") _
-                          + "-TM" + Format(TimeIndex, "0000")
-                          
-                        
-                        'Export images
-                        Dim strName, strExtension As String
-                        Dim nExportType As Integer
-                        If OptionPNG8.Value Then
-                            nExportType = eExportTiff
-                            strExtension = ".tif"
-                        ElseIf OptionPNG12.Value Then
-                            nExportType = eExportTiff12Bit
-                            strExtension = ".tif"
-                        ElseIf OptionTiff8.Value Then
-                            nExportType = eExportTiff
-                            strExtension = ".png"
-                        ElseIf OptionTiff12.Value Then
-                            nExportType = eExportTiff12Bit
-                            strExtension = ".png"
-                        End If
-                        
-                        'export as tifs first then convert if png
-                        Dim strZ As String
-                        For channel = 0 To RecordingDoc.GetDimensionChannels - 1
-                            strName = strFilename + "-CH" + Format(channel, "00") + "-ZS"
-                            If RecordingDoc.GetDimensionZ = 1 Then
-                               strZ = "0000"
-                            ElseIf RecordingDoc.GetDimensionZ < 10 Then
-                               strZ = "000"
-                            ElseIf RecordingDoc.GetDimensionZ < 100 Then
-                               strZ = "00"
-                            ElseIf RecordingDoc.GetDimensionZ < 1000 Then
-                               strZ = "0"
-                            Else
-                               strZ = ""
-                            End If
-                            success = RecordingDoc.Export(nExportType, strName + strZ + ".tif", True, False, 0, 0, True, channel, channel, channel)
-                        Next channel
-                        
-                        If (OptionPNG8.Value Or OptionPNG12.Value) Then
-                            ' convert tifs to pngs using ImageMagick
-                            While RecordingDoc.IsBusy()
-                                DoEvents
-                                Sleep 200
-                            Wend
-                            'Sleep 5000  'must wait to be sure done saving
-                            For z = 0 To RecordingDoc.GetDimensionZ - 1
-                                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
-                                    strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000")
-                                    Shell ("convertmagick " + strName + ".tif " + strName + ".png")
-                                Next channel
-                            Next z
+            If (OptionUL) Then
+                yInput = startX + SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) + CDbl(XOffsetText)
+                xInput = startY - SpecimenRowIndex * CDbl(DistanceBetweenRowsText) - CDbl(YOffsetText)
+            End If
 
-                            ' delete tifs
-                            Sleep 5000 'must wait for conversion
-                            For z = 0 To RecordingDoc.GetDimensionZ - 1
-                                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
-                                    strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000")
-                                    FileSystem.Kill (strName + ".tif")
-                                Next channel
-                            Next z
-                        End If
-                        
-                        DoEvents
-                        
-                        'Write a line in .mgc file for each image in z-series
-                        sTab = Chr(9) 'tab
-                        Dim Pinhole As Double
-                        Lsm5.Hardware.CpPinholes.Select (1)
-                        For z = 0 To RecordingDoc.GetDimensionZ - 1
-                            For channel = 0 To RecordingDoc.GetDimensionChannels - 1
- '                               recordingdoc.
-                                Pinhole = Lsm5.Hardware.CpPinholes.Diameter
-                                Lsm5.Hardware.CpAmplifiers.Select (channel + 1)
-                                Lsm5.Hardware.CpPmts.Select (channel + 1)
-                                strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000") + strExtension
-                            
-                                Print #intOutFile, "<Image>"
-                            
-                                Print #intOutFile, "Filename" + sTab + strName
-                                Print #intOutFile, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
-                                Print #intOutFile, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
-                                Print #intOutFile, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
-                                Print #intOutFile, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
-                                Print #intOutFile, "Pinhole" + sTab + CStr(Pinhole)
-                                  
-                                'need to add laser attenuation for active lasers and amplifier gain/offset for current channel
-                                
-                                Print #intOutFile, "</Image>"
-                            Next channel
-                        Next z
-                        
-                        'free up memory?
-                        RecordingDoc.CloseAllWindows
-                        Set RecordingDoc = Nothing
-                        Set Recording = Nothing
-                        
-                        'exit if stop button has been clicked
-                        If Not doImage Then GoTo EndLabel
-    
-                                                
-                    Next XTilesIndex
-                Next YTilesIndex
-            Next SpecimenColumnIndex
-        Next SpecimenRowIndex
+            If (OptionUR) Then
+                xInput = startX - SpecimenColumnIndex * CInt(DistanceBetweenColumnsText) - CInt(XOffsetText)
+                yInput = startY + SpecimenRowIndex * CInt(DistanceBetweenRowsText) + CInt(YOffsetText)
+            End If
+
+            If (OptionLL) Then
+                 yInput = startX - SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) - CDbl(XOffsetText)
+                 xInput = startY + SpecimenRowIndex * CDbl(DistanceBetweenRowsText) + CDbl(YOffsetText)
+            End If
+
+            If (OptionLR) Then
+                xInput = startX + SpecimenColumnIndex * CInt(DistanceBetweenColumnsText) + CInt(XOffsetText)
+                yInput = startY - SpecimenRowIndex * CInt(DistanceBetweenRowsText) - CInt(YOffsetText)
+            End If
+            
+            'Do the for loop with rows and columns
+               'Capture rows of specimens
+            For SpecimenRowIndex = 0 To RowsOfSpecimensText - 1
+                'Capture columns of specimens
+                For SpecimenColumnIndex = 0 To ColumnsOfSpecimensText - 1
+                    
+                    'Paul edited here
+                    'Needs more work
+                    ConfusingVariable = AcquireTiledZStack(xInput, yInput, yInput) 'Just put yInput in again so I would have a double
+                    
+                    
+                    
+                Next SpecimenColumnIndex
+            Next SpecimenRowIndex
+        End If
+       
         
        'Update percent complete box
        PercentCompleteText = CInt(CDbl(TimeIndex + 1) * (CDbl(100) / CDbl(TimePointsText.Value)))
@@ -322,6 +157,9 @@ EndLabel:
     
     Close #intOutFile
     
+    'TODO move png conversion code here
+    'TODO getting grayscale tifs
+    
     Set Track = Nothing
     Set Laser = Nothing
     Set DetectionChannel = Nothing
@@ -336,6 +174,9 @@ Private Sub BrowseButton_Click()
     FolderName = GetFolderName("Select a folder")
     If FolderName <> "" Then PathOfFolderForImagesText = FolderName
 End Sub
+
+
+
 
 Private Sub ColumnsOfSpecimensSpin_Change()
     ColumnsOfSpecimensText = ColumnsOfSpecimensSpin
@@ -369,11 +210,32 @@ Private Sub DistanceBetweenRowsText_Change()
 
 End Sub
 
+Private Sub EstCaptureTimePerIntervalText_Change()
+
+End Sub
+
 Private Sub HelpButton_Click()
     HelpForm.Show
 End Sub
 
-
+Private Sub MarkAndFind_Click()
+    RowsOfSpecimensText.Enabled = False
+    RowsOfSpecimensText.BackColor = &H8000000F
+    RowsOfSpecimensSpin.Enabled = False
+    
+    ColumnsOfSpecimensText.Enabled = False
+    ColumnsOfSpecimensText.BackColor = &H8000000F
+    ColumnsOfSpecimensSpin.Enabled = False
+    
+    DistanceBetweenRowsText.Enabled = False
+    DistanceBetweenRowsText.BackColor = &H8000000F
+    DistanceBetweenRowsSpin.Enabled = False
+    
+    DistanceBetweenColumnsText.Enabled = False
+    DistanceBetweenColumnsText.BackColor = &H8000000F
+    DistanceBetweenColumnsSpin.Enabled = False
+    
+End Sub
 
 Private Sub PercentOverlapSpin_Change()
     PercentOverlapText = PercentOverlapSpin
@@ -396,6 +258,7 @@ Private Sub RowsOfSpecimensText_Change()
     SetTotalNumberOfImages
     SetEstTotalDiskSpace
 End Sub
+
 
 Private Sub StartButton_Click()
     doImage = True
@@ -568,11 +431,12 @@ Function RowsOfSpecimens() As Long
         RowsOfSpecimens = 0
     End If
 End Function
+
 Function TimePoints() As Long
     If IsNumeric(TimePointsText) Then
         TimePoints = CLng(TimePointsText)
     Else
-        TimePoints = 0
+        TimePoints = 0#
     End If
 End Function
 Function TimeInterval() As Long
@@ -722,3 +586,281 @@ Private Sub ZOffsetText_Change()
 
 End Sub
 
+'Paul edited here
+'Needs a lot of editing
+Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
+'Capture y tiles per specimen
+    For YTilesIndex = 0 To YTilesPerSpecimenText - 1
+        'Capture x tiles per specimen
+        For XTilesIndex = 0 To XTilesPerSpecimenText - 1
+            Dim Recording As DsRecording
+            Set Recording = Lsm5.DsRecording
+            Recording.TimeSeries = False
+            
+            'Move stage
+            If (OptionUL) Then
+                Lsm5.Hardware.CpStages.PositionY = xPos + XTilesIndex * FOV
+                Lsm5.Hardware.CpStages.PositionX = yPos - YTilesIndex * FOV
+            End If
+
+            If (OptionUR) Then
+                Lsm5.Hardware.CpStages.PositionX = xPos - XTilesIndex * FOV
+                Lsm5.Hardware.CpStages.PositionY = yPos + YTilesIndex * FOV
+            End If
+
+            If (OptionLL) Then
+                 Lsm5.Hardware.CpStages.PositionY = xPos - XTilesIndex * FOV
+                 Lsm5.Hardware.CpStages.PositionX = yPos + YTilesIndex * FOV
+            End If
+
+            If (OptionLR) Then
+                Lsm5.Hardware.CpStages.PositionX = xPos + XTilesIndex * FOV
+                Lsm5.Hardware.CpStages.PositionY = yPos - YTilesIndex * FOV
+            End If
+            
+            'Wait till stage is finished moving
+            While Lsm5.Hardware.CpStages.IsBusy()
+                Sleep (100)
+            Wend
+            
+            'Capture z-stack
+            Dim RecordingDoc As DsRecordingDoc
+            Set RecordingDoc = Lsm5.StartScan()
+            While RecordingDoc.IsBusy()
+                DoEvents
+                Sleep 200
+            Wend
+                                  
+            'Determine size of field of view in microns
+            If (FOV = 0) Then
+                FOV = RecordingDoc.VoxelSizeX() * RecordingDoc.GetDimensionX() * 1000000 * (100 - CInt(PercentOverlapText)) / 100
+            End If
+                                    
+            Dim channel As Integer
+            If Not finishedHeader Then
+                'Write header for .mgc
+                Print #intOutFile, "MegaCapture"
+                Print #intOutFile, "<ImageSessionData>"
+                Print #intOutFile, "Version" + sTab + "3.0"
+                Print #intOutFile, "ExperimentTitle" + sTab + ExperimentTitleText
+                Print #intOutFile, "ExperimentDescription" + sTab + ExperimentDescriptionText
+                Print #intOutFile, "TimeInterval" + sTab + TimeIntervalText
+                Print #intOutFile, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
+                Print #intOutFile, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX * 10 ^ 9))
+                Print #intOutFile, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY * 10 ^ 9))
+                Print #intOutFile, "VoxelSizeZ" + sTab + CStr((RecordingDoc.VoxelSizeZ * 10 ^ 9))
+                Print #intOutFile, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
+                Print #intOutFile, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
+                Print #intOutFile, "DimensionPL" + sTab + "1"
+                If MarkAndFind Then
+                    Print #intOutFile, "DimensionCO" + sTab + PositionsOfSpecimens
+                Else
+                    Print #intOutFile, "DimensionCO" + sTab + ColumnsOfSpecimensText
+                End If
+                Print #intOutFile, "DimensionRO" + sTab + RowsOfSpecimensText
+                'Print #intOutFile, "DimensionPO" + sTab + PositionsOfSpecimens 'added this
+                Print #intOutFile, "DimensionZT" + sTab + "1"
+                Print #intOutFile, "DimensionYT" + sTab + YTilesPerSpecimenText
+                Print #intOutFile, "DimensionXT" + sTab + XTilesPerSpecimenText
+                Print #intOutFile, "DimensionTM" + sTab + TimePointsText
+                Print #intOutFile, "DimensionZS" + sTab + CStr(RecordingDoc.GetDimensionZ)
+                Print #intOutFile, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
+                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                    Print #intOutFile, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
+                    ' TODO record channel name
+                Next channel
+                
+                Dim strDepth, strFileType As String
+                If OptionPNG8.Value Then
+                    strDepth = "8"
+                    strFileType = "PNG"
+                ElseIf OptionPNG12.Value Then
+                    strDepth = "12"
+                    strFileType = "PNG"
+                ElseIf OptionTiff8.Value Then
+                    strDepth = "8"
+                    strFileType = "TIF"
+                ElseIf OptionTiff12.Value Then
+                    strDepth = "12"
+                    strFileType = "TIF"
+                End If
+                
+                Print #intOutFile, "ChannelDepth" + sTab + strDepth
+                Print #intOutFile, "FileType" + sTab + strFileType
+                Print #intOutFile, "</ImageSessionData>"
+
+                finishedHeader = True
+            End If
+            
+            'Set strFilename so can export next round
+            'Export z-stack in format "prefix-pPPPcCCrRRyYYxXXtTTTTzZZZ
+            'p is for plate number but can't switch plates on cyclops
+            If MarkAndFind Then
+                strFilename = PathOfFolderForImagesText _
+                  + FilenamePrefixText _
+                  + "-PL00" _
+                  + "-CO" + Format(SpecimenPositionIndex, "00") _
+                  + "-RO" + Format(SpecimenRowIndex, "00") _
+                  + "-ZT00" _
+                  + "-YT" + Format(YTilesIndex, "00") _
+                  + "-XT" + Format(XTilesIndex, "00") _
+                  + "-TM" + Format(TimeIndex, "0000")
+            Else
+                strFilename = PathOfFolderForImagesText _
+                  + FilenamePrefixText _
+                  + "-PL00" _
+                  + "-CO" + Format(SpecimenColumnIndex, "00") _
+                  + "-RO" + Format(SpecimenRowIndex, "00") _
+                  + "-ZT00" _
+                  + "-YT" + Format(YTilesIndex, "00") _
+                  + "-XT" + Format(XTilesIndex, "00") _
+                  + "-TM" + Format(TimeIndex, "0000")
+            End If
+            
+            'Export images
+            Dim strName, strExtension As String
+            Dim nExportType As Integer
+            If OptionPNG8.Value Then
+                nExportType = eExportTiff
+                strExtension = ".tif"
+            ElseIf OptionPNG12.Value Then
+                nExportType = eExportTiff12Bit
+                strExtension = ".tif"
+            ElseIf OptionTiff8.Value Then
+                nExportType = eExportTiff
+                strExtension = ".png" 'bug? should be tif
+            ElseIf OptionTiff12.Value Then
+                nExportType = eExportTiff12Bit
+                strExtension = ".png" 'bug? should be tif
+            End If
+            
+            'export as tifs first then convert if png
+            Dim strZ As String
+            For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                strName = strFilename + "-CH" + Format(channel, "00") + "-ZS"
+                If RecordingDoc.GetDimensionZ = 1 Then
+                   strZ = "0000"
+                ElseIf RecordingDoc.GetDimensionZ < 10 Then
+                   strZ = "000"
+                ElseIf RecordingDoc.GetDimensionZ < 100 Then
+                   strZ = "00"
+                ElseIf RecordingDoc.GetDimensionZ < 1000 Then
+                   strZ = "0"
+                Else
+                   strZ = ""
+                End If
+                success = RecordingDoc.Export(nExportType, strName + strZ + ".tif", True, False, 0, 0, True, channel, channel, channel)
+            Next channel
+            
+            If (OptionPNG8.Value Or OptionPNG12.Value) Then
+                ' convert tifs to pngs using ImageMagick
+                While RecordingDoc.IsBusy()
+                    DoEvents
+                    Sleep 200
+                Wend
+                'Sleep 5000  'must wait to be sure done saving
+                For z = 0 To RecordingDoc.GetDimensionZ - 1
+                    For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                        strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000")
+                        Shell ("convertmagick " + strName + ".tif " + strName + ".png")
+                    Next channel
+                Next z
+
+                ' delete tifs
+                Sleep 5000 'must wait for conversion
+                For z = 0 To RecordingDoc.GetDimensionZ - 1
+                    For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                        strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000")
+                        FileSystem.Kill (strName + ".tif")
+                    Next channel
+                Next z
+            End If
+            
+            DoEvents
+            
+            'Write a line in .meg file for each image in z-series
+            sTab = Chr(9) 'tab
+            Dim Pinhole As Double
+            Lsm5.Hardware.CpPinholes.Select (1)
+            For z = 0 To RecordingDoc.GetDimensionZ - 1
+                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+'                               recordingdoc.
+' TODO should also record(master gain, digital offset and digital gain)
+                    Pinhole = Lsm5.Hardware.CpPinholes.Diameter
+                    Lsm5.Hardware.CpAmplifiers.Select (channel + 1)
+                    Lsm5.Hardware.CpPmts.Select (channel + 1)
+                    strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000") + strExtension
+                
+                    Print #intOutFile, "<Image>"
+                
+                    Print #intOutFile, "Filename" + sTab + strName
+                    Print #intOutFile, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
+                    Print #intOutFile, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
+                    Print #intOutFile, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
+                    Print #intOutFile, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
+                    Print #intOutFile, "Pinhole" + sTab + CStr(Pinhole)
+                      
+                    'TODO need to add laser attenuation for active lasers and amplifier gain/offset for current channel
+                    
+                    Print #intOutFile, "</Image>"
+                Next channel
+            Next z
+            
+            'free up memory?
+            RecordingDoc.CloseAllWindows
+            Set RecordingDoc = Nothing
+            Set Recording = Nothing
+            'TODO is memoery leak still a problem? if so does this line help?
+            
+            'exit if stop button has been clicked
+            If Not doImage Then GoTo EndLabel
+
+                                    
+        Next XTilesIndex
+    Next YTilesIndex
+                
+End Function
+
+Public Function GetMarkedLocations(MyXpos() As Double, MyYpos() As Double, MyZpos() As Double) As Long
+   Dim idx As Long
+
+   Dim xPos As Double
+   Dim yPos As Double
+   Dim zPos As Double
+
+   Dim Result As Long
+   Dim Positions As Long
+   Dim cnt As Long
+   Dim Stage As CpStages
+
+   Set Stage = Lsm5.Hardware.CpStages
+
+   cnt = 0
+   On Error GoTo retry
+retry:
+   If cnt > 1000 Then GoTo Finish
+   cnt = cnt + 1
+
+
+    Positions = Stage.MarkCount
+    If Positions < 1 Then
+       Positions = 0
+    Else
+       xPos = Lsm5.Hardware.CpStages.PositionX
+       yPos = Lsm5.Hardware.CpStages.PositionY
+       zPos = Lsm5.Hardware.CpFocus.Position
+       ReDim MyXpos(Positions)
+       ReDim MyYpos(Positions)
+       ReDim MyZpos(Positions)
+
+       For idx = 1 To Positions
+           Result = Lsm5.ExternalCpObject.pHardwareObjects.pStage.pItem(0).GetMarkZ(idx - 1, xPos, yPos, zPos)
+           MyXpos(idx) = xPos
+           MyYpos(idx) = yPos
+           MyZpos(idx) = zPos
+       Next idx
+   End If
+Finish:
+   GetMarkedLocations = Positions
+
+End Function
