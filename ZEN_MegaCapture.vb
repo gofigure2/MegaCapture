@@ -18,6 +18,10 @@ Dim redChannel As Integer
 Dim greenChannel As Integer
 Dim blueChannel As Integer
 Dim Recording As DsRecording
+Dim ArrayTopZ As Double
+Dim FOV As Integer
+
+Dim sTab As String
 'end global
 
 Private Type BROWSEINFO ' used by the function GetFolderName
@@ -53,7 +57,6 @@ Sub StartMegaCapture()
     Dim TimePointStartTime As Date
     Dim strFileExtension As String
     Dim z As Integer
-    Dim FOV As Integer
         
     FOV = 0
     
@@ -65,8 +68,7 @@ Sub StartMegaCapture()
     strOutFile = PathOfFolderForImagesText + FilenamePrefixText + ".meg"
     Close #intOutFile
     Open strOutFile For Output As #intOutFile
-    Dim sTab As String
-    sTab = Chr(9) 'tab
+    'This is where sTab used to have its Dim and its sTab = Chr(9) 'tab
     
     Dim finishedHeader As Boolean
     finishedHeader = False
@@ -101,11 +103,10 @@ Sub StartMegaCapture()
                 'Even though AcquireTiledZStack is a Sub in your example code, VB doesn 't differentiate between the calling syntax of a Sub
                 'and a Function. Regardless of whether the procedure you're calling is a Sub or a Function, if you use parentheses and don't
                 'use the Call keyword, VB expects there to be a return value
-                'Recording.FocusPosABC1 = 1.03
-                'Recording.FocusPosABC2 = 1.03
-                Call AcquireTiledZStack(MyXpos(SpecimenPositionIndex), MyYpos(SpecimenPositionIndex), MyZpos(SpecimenPositionIndex))
-                'Recording.FocusPosABC1 = 0.03
-                'Recording.FocusPosABC2 = 0.03
+                'MyXpos, etc. starts counting from 1, so had to add this + 1
+                
+                Call AcquireTiledZStack(MyXpos(SpecimenPositionIndex + 1), MyYpos(SpecimenPositionIndex + 1), MyZpos(SpecimenPositionIndex + 1))
+                'Will have to add additional arguments for AcquireTiledZStack with NumberOfZSlicesText and ZSliceSpacingText
                 'For xtile,ytile,z
                 'exit if stop button has been clicked
                 'this doesn't work inside this subroutine
@@ -142,7 +143,7 @@ Sub StartMegaCapture()
             For SpecimenRowIndex = 0 To RowsOfSpecimensText - 1
                 'Capture columns of specimens
                 For SpecimenColumnIndex = 0 To ColumnsOfSpecimensText - 1
-                    Call AcquireTiledZStack(xInput, yInput, yInput) 'Just put yInput in again so I would have a double
+                    Call AcquireTiledZStack(xInput, yInput, ArrayTopZ) 'Just put yInput in again so I would have a double
                     'exit if stop button has been clicked
                     'this doesn't work inside this subroutine
                     If Not doImage Then GoTo EndLabel
@@ -169,6 +170,9 @@ EndLabel:
     'Move to original XY stage position
     Lsm5.Hardware.CpStages.PositionX = startX
     Lsm5.Hardware.CpStages.PositionY = startY
+    
+    StopButton.Enabled = False
+    StartButton.Enabled = True
     
     Close #intOutFile
     
@@ -238,7 +242,7 @@ End Sub
 
 Private Sub MarkAndFind_Click()
     
-    If MarkAndFind Then
+    If MarkAndFind Then 'If you're checking the Use Mark & Find box
     
         RowsOfSpecimensText.Enabled = False
         RowsOfSpecimensText.BackColor = &H80000013
@@ -256,7 +260,17 @@ Private Sub MarkAndFind_Click()
         DistanceBetweenColumnsText.BackColor = &H80000013
         DistanceBetweenColumnsSpin.Enabled = False
         
-    Else
+        'NumberOfZSlicesText.Enabled = True
+        'NumberOfZSlicesText.BackColor = &H8000000F
+        'NumberOfZSlicesSpin.Enabled = True
+        
+        'ZSliceSpacingText.Enabled = True
+        'ZSliceSpacingText.BackColor = &H8000000F
+        'ZSliceSpacingSpin.Enabled = True
+        
+        SetTopZ.Enabled = False
+        
+    Else 'If you're unchecking the Use Mark & Find box
         
         RowsOfSpecimensText.Enabled = True
         RowsOfSpecimensText.BackColor = &H8000000F
@@ -274,8 +288,23 @@ Private Sub MarkAndFind_Click()
         DistanceBetweenColumnsText.BackColor = &H8000000F
         DistanceBetweenColumnsSpin.Enabled = True
         
+        'NumberOfZSlicesText.Enabled = False
+        'NumberOfZSlicesText.BackColor = &H80000013
+        'NumberOfZSlicesSpin.Enabled = False
+        
+        'ZSliceSpacingText.Enabled = False
+        'ZSliceSpacingText.BackColor = &H80000013
+        'ZSliceSpacingSpin.Enabled = False
+        
+        SetTopZ.Enabled = True
+        
     End If
 End Sub
+
+Private Sub NumberOfZSlicesText_Change()
+
+End Sub
+
 
 Private Sub PercentOverlapSpin_Change()
     PercentOverlapText = PercentOverlapSpin
@@ -300,13 +329,21 @@ Private Sub RowsOfSpecimensText_Change()
 End Sub
 
 
+Private Sub SetTopZ_Click()
+    ArrayTopZ = Lsm5.Hardware.CpFocus.Position
+End Sub
+
 Private Sub StartButton_Click()
     doImage = True
+    StartButton.Enabled = False
+    StopButton.Enabled = True
     StartMegaCapture
 End Sub
 
 Private Sub StopButton_Click()
     doImage = False
+    StartButton.Enabled = True
+    StopButton.Enabled = False
 End Sub
 Private Sub SetEstCaptureTimePerInterval()
     EstCaptureTimePerIntervalText = CInt(XTilesPerSpecimen * YTilesPerSpecimen _
@@ -628,7 +665,8 @@ End Sub
 
 'Sub because I don't want it to return a value.  Will need to use Call when calling this Sub
 Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
-'Capture y tiles per specimen
+    sTab = Chr(9) 'tab
+    'Capture y tiles per specimen
     For YTilesIndex = 0 To YTilesPerSpecimenText - 1
         'Capture x tiles per specimen
         For XTilesIndex = 0 To XTilesPerSpecimenText - 1
@@ -662,6 +700,7 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             
             'Capture z-stack
             Dim RecordingDoc As DsRecordingDoc
+            Lsm5.Hardware.CpFocus.Position = zPos 'Added this
             Set RecordingDoc = Lsm5.StartScan()
             While RecordingDoc.IsBusy()
                 DoEvents
