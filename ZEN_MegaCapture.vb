@@ -62,14 +62,8 @@ Sub StartMegaCapture()
     Dim sTab As String
     sTab = Chr(9) 'tab
     
-    'Write header for .mgc
-    Print #intOutFile, "MegaCaptureSummary-version1.0"
-    Print #intOutFile, ExperimentTitleText
-    Print #intOutFile, ExperimentDescriptionText
-    Print #intOutFile, CStr(VoxelSizeX) + sTab + CStr(VoxelSizeY) + sTab + CStr(VoxelSizeZ) + sTab + TimeIntervalText
-    
-    'Write column labels to .mgc file
-    Print #intOutFile, "Filename" + sTab + "RIndex" + sTab + "CIndex" + sTab + "XIndex" + sTab + "YIndex" + sTab + "ZIndex" + sTab + "TIndex" + sTab + "X-Offset" + sTab + "Y-Offset" + sTab + "Z-Offset" + sTab + "CaptureDate" + sTab + "Pinhole1" + sTab + "Pinhole2" + sTab + "Pinhole3" + sTab + "Gain1" + sTab + "Gain2" + sTab + "Gain3" + sTab + "Attenuation488" + sTab + "Attenuation543" + sTab + "Attenuation820"
+    Dim finishedHeader As Boolean
+    finishedHeader = False
     
     'Enable nudging buttons
     XOffsetSpin.Enabled = True
@@ -86,32 +80,6 @@ Sub StartMegaCapture()
     Dim stageIndex As Long
     strFilename = ""
     FOV = 0
-    redChannel = 1
-    greenChannel = 2
-    blueChannel = 3
-    
-    'get red channel
-    If (OptionCh1R) Then redChannel = 0
-    If (OptionCh2R) Then redChannel = 1
-    If (OptionCh3R) Then redChannel = 2
-    If (OptionChMR) Then redChannel = 3
-    If (OptionChDR) Then redChannel = 4
-    
-    'get green channel
-    If (OptionCh1G) Then greenChannel = 0
-    If (OptionCh2G) Then greenChannel = 1
-    If (OptionCh3G) Then greenChannel = 2
-    If (OptionChMG) Then greenChannel = 3
-    If (OptionChDG) Then greenChannel = 4
-    
-    'get blue channel
-    If (OptionCh1B) Then blueChannel = 0
-    If (OptionCh2B) Then blueChannel = 1
-    If (OptionCh3B) Then blueChannel = 2
-    If (OptionChMB) Then blueChannel = 3
-    If (OptionChDB) Then blueChannel = 4
-    
-'    MsgBox ("red=" + CStr(redChannel) + " green=" + CStr(greenChannel) + " blue=" + CStr(blueChannel))
               
     'Capture time points
     For TimeIndex = 0 To TimePointsText.Value - 1
@@ -165,105 +133,160 @@ Sub StartMegaCapture()
                                               
                         'Determine size of field of view in microns
                         If (FOV = 0) Then
-                            FOV = RecordingDoc.VoxelSizeX * RecordingDoc.GetDimensionX() * 1000000 * (100 - CInt(PercentOverlapText)) / 100
-    '                        For channel = 5 To 0 Step -1
-    '                            If RecordingDoc.ChannelColor(channel) = 255 Then redChannel = channel
-    '                            If RecordingDoc.ChannelColor(channel) = 65280 Then greenChannel = channel
-    '                            If RecordingDoc.ChannelColor(channel) = 16711680 Then blueChannel = channel
-    '                        Next
+                            FOV = RecordingDoc.VoxelSizeX() * RecordingDoc.GetDimensionX() * 1000000 * (100 - CInt(PercentOverlapText)) / 100
+                        End If
+                                                
+                        Dim channel As Integer
+                        If Not finishedHeader Then
+                            'Write header for .mgc
+                            Print #intOutFile, "MegaCapture"
+                            Print #intOutFile, "<ImageSessionData>"
+                            Print #intOutFile, "Version" + sTab + "3.0"
+                            Print #intOutFile, "ExperimentTitle" + sTab + ExperimentTitleText
+                            Print #intOutFile, "ExperimentDescription" + sTab + ExperimentDescriptionText
+                            Print #intOutFile, "TimeInterval" + sTab + TimeIntervalText
+                            Print #intOutFile, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
+                            Print #intOutFile, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX * 10 ^ 9))
+                            Print #intOutFile, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY * 10 ^ 9))
+                            Print #intOutFile, "VoxelSizeZ" + sTab + CStr((RecordingDoc.VoxelSizeZ * 10 ^ 9))
+                            Print #intOutFile, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
+                            Print #intOutFile, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
+                            Print #intOutFile, "DimensionPL" + sTab + "1"
+                            Print #intOutFile, "DimensionCO" + sTab + ColumnsOfSpecimensText
+                            Print #intOutFile, "DimensionRO" + sTab + RowsOfSpecimensText
+                            Print #intOutFile, "DimensionZT" + sTab + "1"
+                            Print #intOutFile, "DimensionYT" + sTab + YTilesPerSpecimenText
+                            Print #intOutFile, "DimensionXT" + sTab + XTilesPerSpecimenText
+                            Print #intOutFile, "DimensionTM" + sTab + TimePointsText
+                            Print #intOutFile, "DimensionZS" + sTab + CStr(RecordingDoc.GetDimensionZ)
+                            Print #intOutFile, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
+                            For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                                Print #intOutFile, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
+                            Next channel
+                            
+                            Dim strDepth, strFileType As String
+                            If OptionPNG8.Value Then
+                                strDepth = "8"
+                                strFileType = "PNG"
+                            ElseIf OptionPNG12.Value Then
+                                strDepth = "12"
+                                strFileType = "PNG"
+                            ElseIf OptionTiff8.Value Then
+                                strDepth = "8"
+                                strFileType = "TIF"
+                            ElseIf OptionTiff12.Value Then
+                                strDepth = "12"
+                                strFileType = "TIF"
+                            End If
+                            
+                            Print #intOutFile, "ChannelDepth" + sTab + strDepth
+                            Print #intOutFile, "FileType" + sTab + strFileType
+                            Print #intOutFile, "</ImageSessionData>"
+     
+                            finishedHeader = True
                         End If
                         
                         'Set strFilename so can export next round
-                        'Export z-stack in format "prefix-cCCrRRyYYxXXtTTTTzZZZ
+                        'Export z-stack in format "prefix-pPPPcCCrRRyYYxXXtTTTTzZZZ
+                        'p is for plate number but can't switch plates on cyclops
                         strFilename = PathOfFolderForImagesText _
                           + FilenamePrefixText _
-                          + "-c" + Format(SpecimenColumnIndex, "00") _
-                          + "-r" + Format(SpecimenRowIndex, "00") _
-                          + "-y" + Format(YTilesIndex, "00") _
-                          + "-x" + Format(XTilesIndex, "00") _
-                          + "-t" + Format(TimeIndex, "0000") _
-                          + "-z"
+                          + "-PL00" _
+                          + "-CO" + Format(SpecimenColumnIndex, "00") _
+                          + "-RO" + Format(SpecimenRowIndex, "00") _
+                          + "-ZT00" _
+                          + "-YT" + Format(YTilesIndex, "00") _
+                          + "-XT" + Format(XTilesIndex, "00") _
+                          + "-TM" + Format(TimeIndex, "0000")
+                          
                         
                         'Export images
-   '                     MsgBox ("About to export")
-                        'JpegMedium gives same size file as JpegAccurate. This might be bug in API.
-                        'I can't tell difference between JpegPoor and JpegMedium in quality but it is 5x smaller so using Poor
-                        'You must use a 3 channel image
+                        Dim strName, strExtension As String
                         Dim nExportType As Integer
-                        If JpegHighCompressionButton.Value Then
-                            strFileExtension = ".jpg"
-                            nExportType = eExportJpegPoor
-                        ElseIf JpegLowCompressionButton.Value Then
-                            strFileExtension = ".jpg"
-                            nExportType = eExportJpegAccurate
-                        ElseIf TiffButton.Value Then
-                            strFileExtension = ".tif"
+                        If OptionPNG8.Value Then
                             nExportType = eExportTiff
-                        ElseIf Tiff12Button.Value Then
-                            strFileExtension = ".tif"
+                            strExtension = ".tif"
+                        ElseIf OptionPNG12.Value Then
                             nExportType = eExportTiff12Bit
-                        ElseIf LSM4Button.Value Then
-                            strFileExtension = ".lsm"
-                            nExportType = eExportLsm4Chunky
+                            strExtension = ".tif"
+                        ElseIf OptionTiff8.Value Then
+                            nExportType = eExportTiff
+                            strExtension = ".png"
+                        ElseIf OptionTiff12.Value Then
+                            nExportType = eExportTiff12Bit
+                            strExtension = ".png"
                         End If
                         
-                            success = RecordingDoc.Export(nExportType, strFilename + strFileExtension, True, False, 0, 0, False, redChannel, greenChannel, blueChannel)
+                        'export as tifs first then convert if png
+                        Dim strZ As String
+                        For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                            strName = strFilename + "-CH" + Format(channel, "00") + "-ZS"
+                            If RecordingDoc.GetDimensionZ = 1 Then
+                               strZ = "0000"
+                            ElseIf RecordingDoc.GetDimensionZ < 10 Then
+                               strZ = "000"
+                            ElseIf RecordingDoc.GetDimensionZ < 100 Then
+                               strZ = "00"
+                            ElseIf RecordingDoc.GetDimensionZ < 1000 Then
+                               strZ = "0"
+                            Else
+                               strZ = ""
+                            End If
+                            success = RecordingDoc.Export(nExportType, strName + strZ + ".tif", True, False, 0, 0, True, channel, channel, channel)
+                        Next channel
+                        
+                        If (OptionPNG8.Value Or OptionPNG12.Value) Then
+                            ' convert tifs to pngs using ImageMagick
+                            While RecordingDoc.IsBusy()
+                                DoEvents
+                                Sleep 200
+                            Wend
+                            'Sleep 5000  'must wait to be sure done saving
+                            For z = 0 To RecordingDoc.GetDimensionZ - 1
+                                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                                    strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000")
+                                    Shell ("convertmagick " + strName + ".tif " + strName + ".png")
+                                Next channel
+                            Next z
+
+                            ' delete tifs
+                            Sleep 5000 'must wait for conversion
+                            For z = 0 To RecordingDoc.GetDimensionZ - 1
+                                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                                    strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000")
+                                    FileSystem.Kill (strName + ".tif")
+                                Next channel
+                            Next z
+                        End If
                         
                         DoEvents
                         
                         'Write a line in .mgc file for each image in z-series
                         sTab = Chr(9) 'tab
+                        Dim Pinhole As Double
+                        Lsm5.Hardware.CpPinholes.Select (1)
                         For z = 0 To RecordingDoc.GetDimensionZ - 1
-                            Dim Pinhole1 As Double
-                            Lsm5.Hardware.CpPinholes.Select (1)
-                            Pinhole1 = Lsm5.Hardware.CpPinholes.Diameter
-                            Dim Pinhole2 As Double
-                            Lsm5.Hardware.CpPinholes.Select (2)
-                            Pinhole2 = Lsm5.Hardware.CpPinholes.Diameter
-                            Dim Pinhole3 As Double
-                            Lsm5.Hardware.CpPinholes.Select (3)
-                            Pinhole3 = Lsm5.Hardware.CpPinholes.Diameter
-                                                 
-                            Dim Gain1 As Double
-                            Lsm5.Hardware.CpPmts.Select (5)
-                            Gain1 = Lsm5.Hardware.CpPmts.Gain
-                            Dim Gain2 As Double
-                            Lsm5.Hardware.CpPmts.Select (6)
-                            Gain2 = Lsm5.Hardware.CpPmts.Gain
-                            Dim Gain3 As Double
-                            Lsm5.Hardware.CpPmts.Select (7)
-                            Gain3 = Lsm5.Hardware.CpPmts.Gain
-
-                            Dim Attenuation488 As Double
-                            Attenuation488 = Lsm5.Hardware.CpLaserLines.Attenuation(488)
-                            Dim Attenuation543 As Double
-                            Attenuation543 = Lsm5.Hardware.CpLaserLines.Attenuation(543)
-                            Dim Attenuation820 As Double
-                            Attenuation820 = Lsm5.Hardware.CpLaserLines.Attenuation(820)
+                            For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+ '                               recordingdoc.
+                                Pinhole = Lsm5.Hardware.CpPinholes.Diameter
+                                Lsm5.Hardware.CpAmplifiers.Select (channel + 1)
+                                Lsm5.Hardware.CpPmts.Select (channel + 1)
+                                strName = strFilename + "-ch" + Format(channel, "00") + "-zs" + Format(z, "0000") + strExtension
                             
-                            Print #intOutFile, strFilename + Format(z, "000") + strFileExtension + sTab + _
-                              CStr(SpecimenRowIndex) + sTab + _
-                              CStr(SpecimenColumnIndex) + sTab + _
-                              CStr(XTilesIndex) + sTab + _
-                              CStr(YTilesIndex) + sTab + _
-                              CStr(z) + sTab + _
-                              CStr(TimeIndex) + sTab + _
-                              XOffsetText + sTab + _
-                              YOffsetText + sTab + _
-                              ZOffsetText + sTab + _
-                              CStr(Now()) + sTab + _
-                              CStr(Pinhole1) + sTab + _
-                              CStr(Pinhole2) + sTab + _
-                              CStr(Pinhole3) + sTab + _
-                              CStr(CLng(Gain1)) + sTab + _
-                              CStr(CLng(Gain2)) + sTab + _
-                              CStr(CLng(Gain3)) + sTab + _
-                              CStr(CDbl(CInt(Attenuation488 * 10) / 10)) + sTab + _
-                              CStr(CDbl(CInt(Attenuation543 * 10) / 10)) + sTab + _
-                              CStr(CDbl(CInt(Attenuation820 * 10) / 10))
-                              'date/time saved is not quite right since it is the date/time of saving rather than capture
+                                Print #intOutFile, "<Image>"
+                            
+                                Print #intOutFile, "Filename" + sTab + strName
+                                Print #intOutFile, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
+                                Print #intOutFile, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
+                                Print #intOutFile, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
+                                Print #intOutFile, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
+                                Print #intOutFile, "Pinhole" + sTab + CStr(Pinhole)
+                                  
+                                'need to add laser attenuation for active lasers and amplifier gain/offset for current channel
+                                
+                                Print #intOutFile, "</Image>"
+                            Next channel
                         Next z
-                        
                         
                         'free up memory?
                         RecordingDoc.CloseAllWindows
@@ -350,6 +373,8 @@ Private Sub HelpButton_Click()
     HelpForm.Show
 End Sub
 
+
+
 Private Sub PercentOverlapSpin_Change()
     PercentOverlapText = PercentOverlapSpin
 End Sub
@@ -393,9 +418,6 @@ Private Sub SetEstCaptureTimePerInterval()
     End If
 End Sub
 
-Private Sub TiffButton_Click()
-
-End Sub
 
 Private Sub TimeIntervalSpin_Change()
     TimeIntervalText = TimeIntervalSpin
@@ -699,4 +721,4 @@ Private Sub ZOffsetText_Change()
     ZOffsetText = ZOffsetSpin
 
 End Sub
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+
