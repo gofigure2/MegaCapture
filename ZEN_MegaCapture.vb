@@ -2,20 +2,22 @@
 'global
 Dim displayedWarning As Boolean
 Dim doImage As Boolean
+'Dim MarkAndFind As Boolean
 Dim TimeIndex As Integer
 Dim SpecimenRowIndex As Integer
 Dim SpecimenColumnIndex As Integer
 Dim SpecimenPositionIndex As Integer 'Paul added this
+Dim PositionsOfSpecimens As Long 'Long, which I think was Sean's idea or I took because ColumnsOfSpecimens was Long
 Dim XTilesIndex As Integer
 Dim YTilesIndex As Integer
 Dim intOutFile As Integer
 Dim strOutFile As String
-Dim success As Integer
+Dim Success As Integer
 Dim strFilename As String
 Dim redChannel As Integer
 Dim greenChannel As Integer
 Dim blueChannel As Integer
-
+Dim Recording As DsRecording
 'end global
 
 Private Type BROWSEINFO ' used by the function GetFolderName
@@ -55,6 +57,9 @@ Sub StartMegaCapture()
         
     FOV = 0
     
+    Set Recording = Lsm5.DsRecording
+    Recording.TimeSeries = False
+    
     'Create .meg file to save parameters for all images for importing to GoFigure
     intOutFile = FreeFile
     strOutFile = PathOfFolderForImagesText + FilenamePrefixText + ".meg"
@@ -81,25 +86,37 @@ Sub StartMegaCapture()
     Dim stageIndex As Long
     strFilename = ""
     FOV = 0
-              
+            
     'Capture time points
     For TimeIndex = 0 To TimePointsText.Value - 1
        TimePointStartTime = Now()
        
         If MarkAndFind Then
         
-            Dim xPos(), yPos(), zPos() As Double
-            Dim PositionsOfSpecimens As Long
-            PositionsOfSpecimens = GetMarkedLocations(xPos, yPos, zPos) 'Do I need xPos() instead?
-            For SpecimenPositionIndex = 1 To PositionsOfSpecimens
-                ConfusingVariable = AcquireTiledZStack(xPos(i), yPos(i), zPos(i))
-                
-                'Do the for loop with position index increasing
+            Dim MyXpos() As Double
+            Dim MyYpos() As Double
+            Dim MyZpos() As Double
+            PositionsOfSpecimens = GetMarkedLocations(MyXpos(), MyYpos(), MyZpos()) 'Do I need xPos() instead?  I think I did
+            For SpecimenPositionIndex = 0 To PositionsOfSpecimens - 1
+                'Even though AcquireTiledZStack is a Sub in your example code, VB doesn 't differentiate between the calling syntax of a Sub
+                'and a Function. Regardless of whether the procedure you're calling is a Sub or a Function, if you use parentheses and don't
+                'use the Call keyword, VB expects there to be a return value
+                'Recording.FocusPosABC1 = 1.03
+                'Recording.FocusPosABC2 = 1.03
+                Call AcquireTiledZStack(MyXpos(SpecimenPositionIndex), MyYpos(SpecimenPositionIndex), MyZpos(SpecimenPositionIndex))
+                'Recording.FocusPosABC1 = 0.03
+                'Recording.FocusPosABC2 = 0.03
                 'For xtile,ytile,z
-            Next SpecimenPositionIndex
+                'exit if stop button has been clicked
+                'this doesn't work inside this subroutine
+                If Not doImage Then GoTo EndLabel
+                'Do I want this in here?  I might want Stop to only stop at the end of a set of tiles
+            Next SpecimenPositionIndex 'Do the for loop with position index increasing
             
         Else
-
+            Dim yInput As Double
+            Dim xInput As Double
+            'Here is where I would also Dim zInput As Double
             If (OptionUL) Then
                 yInput = startX + SpecimenColumnIndex * CDbl(DistanceBetweenColumnsText) + CDbl(XOffsetText)
                 xInput = startY - SpecimenRowIndex * CDbl(DistanceBetweenRowsText) - CDbl(YOffsetText)
@@ -125,13 +142,11 @@ Sub StartMegaCapture()
             For SpecimenRowIndex = 0 To RowsOfSpecimensText - 1
                 'Capture columns of specimens
                 For SpecimenColumnIndex = 0 To ColumnsOfSpecimensText - 1
-                    
-                    'Paul edited here
-                    'Needs more work
-                    ConfusingVariable = AcquireTiledZStack(xInput, yInput, yInput) 'Just put yInput in again so I would have a double
-                    
-                    
-                    
+                    Call AcquireTiledZStack(xInput, yInput, yInput) 'Just put yInput in again so I would have a double
+                    'exit if stop button has been clicked
+                    'this doesn't work inside this subroutine
+                    If Not doImage Then GoTo EndLabel
+                    'Do I want this in here?  I might want Stop to only stop at the end of a set of tiles
                 Next SpecimenColumnIndex
             Next SpecimenRowIndex
         End If
@@ -148,9 +163,9 @@ Sub StartMegaCapture()
         Loop
    
     Next TimeIndex
-    
+
 EndLabel:
-    
+                
     'Move to original XY stage position
     Lsm5.Hardware.CpStages.PositionX = startX
     Lsm5.Hardware.CpStages.PositionY = startY
@@ -168,6 +183,7 @@ EndLabel:
     Set BeamSplitter = Nothing
     Set Timers = Nothing
     Set Markers = Nothing
+                
 End Sub
 Private Sub BrowseButton_Click()
     Dim FolderName As String
@@ -218,23 +234,47 @@ Private Sub HelpButton_Click()
     HelpForm.Show
 End Sub
 
+
+
 Private Sub MarkAndFind_Click()
-    RowsOfSpecimensText.Enabled = False
-    RowsOfSpecimensText.BackColor = &H8000000F
-    RowsOfSpecimensSpin.Enabled = False
     
-    ColumnsOfSpecimensText.Enabled = False
-    ColumnsOfSpecimensText.BackColor = &H8000000F
-    ColumnsOfSpecimensSpin.Enabled = False
+    If MarkAndFind Then
     
-    DistanceBetweenRowsText.Enabled = False
-    DistanceBetweenRowsText.BackColor = &H8000000F
-    DistanceBetweenRowsSpin.Enabled = False
+        RowsOfSpecimensText.Enabled = False
+        RowsOfSpecimensText.BackColor = &H80000013
+        RowsOfSpecimensSpin.Enabled = False
     
-    DistanceBetweenColumnsText.Enabled = False
-    DistanceBetweenColumnsText.BackColor = &H8000000F
-    DistanceBetweenColumnsSpin.Enabled = False
+        ColumnsOfSpecimensText.Enabled = False
+        ColumnsOfSpecimensText.BackColor = &H80000013
+        ColumnsOfSpecimensSpin.Enabled = False
     
+        DistanceBetweenRowsText.Enabled = False
+        DistanceBetweenRowsText.BackColor = &H80000013
+        DistanceBetweenRowsSpin.Enabled = False
+    
+        DistanceBetweenColumnsText.Enabled = False
+        DistanceBetweenColumnsText.BackColor = &H80000013
+        DistanceBetweenColumnsSpin.Enabled = False
+        
+    Else
+        
+        RowsOfSpecimensText.Enabled = True
+        RowsOfSpecimensText.BackColor = &H8000000F
+        RowsOfSpecimensSpin.Enabled = True
+    
+        ColumnsOfSpecimensText.Enabled = True
+        ColumnsOfSpecimensText.BackColor = &H8000000F
+        ColumnsOfSpecimensSpin.Enabled = True
+    
+        DistanceBetweenRowsText.Enabled = True
+        DistanceBetweenRowsText.BackColor = &H8000000F
+        DistanceBetweenRowsSpin.Enabled = True
+    
+        DistanceBetweenColumnsText.Enabled = True
+        DistanceBetweenColumnsText.BackColor = &H8000000F
+        DistanceBetweenColumnsSpin.Enabled = True
+        
+    End If
 End Sub
 
 Private Sub PercentOverlapSpin_Change()
@@ -483,10 +523,10 @@ Function ZOffset() As Long
 End Function
 
 Function ZDim() As Long
-    Dim success As Integer
+    Dim Success As Integer
 
     Dim RecordingDoc As RecordingDocument
-    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, success)
+    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, Success)
     'the success variable does not seem to work properly
 
     On Error GoTo ErrHandler
@@ -505,8 +545,8 @@ EndLabel:
 End Function
 
 Function VoxelSizeX() As Double
-    Dim success As Integer
-    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, success)
+    Dim Success As Integer
+    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, Success)
     'the success variable does not seem to work properly
     
     On Error GoTo ErrHandler
@@ -524,8 +564,8 @@ EndLabel:
 
 End Function
 Function VoxelSizeY() As Double
-    Dim success As Integer
-    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, success)
+    Dim Success As Integer
+    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, Success)
     'the success variable does not seem to work properly
     
     On Error GoTo ErrHandler
@@ -543,8 +583,8 @@ EndLabel:
 
 End Function
 Function VoxelSizeZ() As Double
-    Dim success As Integer
-    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, success)
+    Dim Success As Integer
+    Set RecordingDoc = Lsm5.DsRecordingDocObject(0, Success)
     'the success variable does not seem to work properly
     
     On Error GoTo ErrHandler
@@ -586,16 +626,13 @@ Private Sub ZOffsetText_Change()
 
 End Sub
 
-'Paul edited here
-'Needs a lot of editing
-Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
+'Sub because I don't want it to return a value.  Will need to use Call when calling this Sub
+Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
 'Capture y tiles per specimen
     For YTilesIndex = 0 To YTilesPerSpecimenText - 1
         'Capture x tiles per specimen
         For XTilesIndex = 0 To XTilesPerSpecimenText - 1
-            Dim Recording As DsRecording
-            Set Recording = Lsm5.DsRecording
-            Recording.TimeSeries = False
+            
             
             'Move stage
             If (OptionUL) Then
@@ -637,8 +674,10 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             End If
                                     
             Dim channel As Integer
+            'Added this to see if I can get channel name
+            'Set DataChannel = Track.DataChannelObjectByChannel(10, Success)
             If Not finishedHeader Then
-                'Write header for .mgc
+                'Write header for .meg
                 Print #intOutFile, "MegaCapture"
                 Print #intOutFile, "<ImageSessionData>"
                 Print #intOutFile, "Version" + sTab + "3.0"
@@ -646,19 +685,19 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 Print #intOutFile, "ExperimentDescription" + sTab + ExperimentDescriptionText
                 Print #intOutFile, "TimeInterval" + sTab + TimeIntervalText
                 Print #intOutFile, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
-                Print #intOutFile, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX * 10 ^ 9))
-                Print #intOutFile, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY * 10 ^ 9))
-                Print #intOutFile, "VoxelSizeZ" + sTab + CStr((RecordingDoc.VoxelSizeZ * 10 ^ 9))
+                Print #intOutFile, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX * 10 ^ 6)) 'changed to microns by Paul
+                Print #intOutFile, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY * 10 ^ 6))
+                Print #intOutFile, "VoxelSizeZ" + sTab + CStr((RecordingDoc.VoxelSizeZ * 10 ^ 6))
                 Print #intOutFile, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
                 Print #intOutFile, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
                 Print #intOutFile, "DimensionPL" + sTab + "1"
                 If MarkAndFind Then
-                    Print #intOutFile, "DimensionCO" + sTab + PositionsOfSpecimens
+                    Print #intOutFile, "DimensionCO" + sTab + Format(PositionsOfSpecimens, "00") 'Could also consider "0"
+                    Print #intOutFile, "DimensionRO" + sTab + "1"
                 Else
                     Print #intOutFile, "DimensionCO" + sTab + ColumnsOfSpecimensText
+                    Print #intOutFile, "DimensionRO" + sTab + RowsOfSpecimensText
                 End If
-                Print #intOutFile, "DimensionRO" + sTab + RowsOfSpecimensText
-                'Print #intOutFile, "DimensionPO" + sTab + PositionsOfSpecimens 'added this
                 Print #intOutFile, "DimensionZT" + sTab + "1"
                 Print #intOutFile, "DimensionYT" + sTab + YTilesPerSpecimenText
                 Print #intOutFile, "DimensionXT" + sTab + XTilesPerSpecimenText
@@ -667,7 +706,8 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 Print #intOutFile, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
                 For channel = 0 To RecordingDoc.GetDimensionChannels - 1
                     Print #intOutFile, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
-                    ' TODO record channel name
+                    ' TODO record channel name.  Not working yet
+                    'Print #intOutFile, "ChannelName" + DataChannel.DyeName
                 Next channel
                 
                 Dim strDepth, strFileType As String
@@ -700,7 +740,7 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                   + FilenamePrefixText _
                   + "-PL00" _
                   + "-CO" + Format(SpecimenPositionIndex, "00") _
-                  + "-RO" + Format(SpecimenRowIndex, "00") _
+                  + "-RO" + Format(0, "00") _
                   + "-ZT00" _
                   + "-YT" + Format(YTilesIndex, "00") _
                   + "-XT" + Format(XTilesIndex, "00") _
@@ -749,7 +789,7 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 Else
                    strZ = ""
                 End If
-                success = RecordingDoc.Export(nExportType, strName + strZ + ".tif", True, False, 0, 0, True, channel, channel, channel)
+                Success = RecordingDoc.Export(nExportType, strName + strZ + ".tif", True, False, 0, 0, True, channel, channel, channel)
             Next channel
             
             If (OptionPNG8.Value Or OptionPNG12.Value) Then
@@ -798,6 +838,12 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                     Print #intOutFile, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
                     Print #intOutFile, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
                     Print #intOutFile, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
+                    'Print #intOutFile, "StageZ" + sTab + CStr(Recording.FocusPosABC1)
+                    'Print #intOutFile, "StageZ" + sTab + CStr(Recording.FocusPosABC2)
+                    'Just playing around here
+                    'Recording.SetABC1Reference = True
+                    
+                    
                     Print #intOutFile, "Pinhole" + sTab + CStr(Pinhole)
                       
                     'TODO need to add laser attenuation for active lasers and amplifier gain/offset for current channel
@@ -810,16 +856,12 @@ Function AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
             RecordingDoc.CloseAllWindows
             Set RecordingDoc = Nothing
             Set Recording = Nothing
-            'TODO is memoery leak still a problem? if so does this line help?
-            
-            'exit if stop button has been clicked
-            If Not doImage Then GoTo EndLabel
-
+            'TODO is memory leak still a problem? if so does this line help?
                                     
         Next XTilesIndex
     Next YTilesIndex
                 
-End Function
+End Sub
 
 Public Function GetMarkedLocations(MyXpos() As Double, MyYpos() As Double, MyZpos() As Double) As Long
    Dim idx As Long
