@@ -10,8 +10,10 @@ Dim SpecimenPositionIndex As Integer 'Paul added this
 Dim PositionsOfSpecimens As Long 'Long, which I think was Sean's idea or I took because ColumnsOfSpecimens was Long
 Dim XTilesIndex As Integer
 Dim YTilesIndex As Integer
-Dim intOutFile As Integer
-Dim strOutFile As String
+Dim intOutFileMeg As Integer
+Dim intOutFileUsr As Integer
+Dim strOutFileMeg As String
+Dim strOutFileUsr As String
 Dim Success As Integer
 Dim strFilename As String
 Dim redChannel As Integer
@@ -22,6 +24,7 @@ Dim Recording As DsRecording
 Dim ArrayTopZ As Double
 Dim ArrayTopZSet As Boolean
 Dim FOV As Integer
+Dim finishedHeader As Boolean
 
 Dim sTab As String
 'end global
@@ -75,13 +78,17 @@ Sub StartMegaCapture()
     'maybe add something about recording.zstack?
     
     'Create .meg file to save parameters for all images for importing to GoFigure
-    intOutFile = FreeFile
-    strOutFile = PathOfFolderForImagesText + FilenamePrefixText + ".meg"
-    Close #intOutFile
-    Open strOutFile For Output As #intOutFile
-    'This is where sTab used to have its Dim and its sTab = Chr(9) 'tab
+    intOutFileMeg = FreeFile
+    strOutFileMeg = PathOfFolderForImagesText + FilenamePrefixText + ".meg"
+    Close #intOutFileMeg
+    Open strOutFileMeg For Output As #intOutFileMeg
     
-    Dim finishedHeader As Boolean
+    intOutFileUsr = FreeFile
+    strOutFileUsr = PathOfFolderForImagesText + FilenamePrefixText + "_BiologistOutput.txt"
+    Close #intOutFileUsr
+    Open strOutFileUsr For Output As #intOutFileUsr
+    'This is where sTab used to have its Dim and its sTab = Chr(9) 'tab
+
     finishedHeader = False
     
     'Enable nudging buttons
@@ -176,15 +183,16 @@ Sub StartMegaCapture()
     Next TimeIndex
 
 EndLabel:
-                
+    
     'Move to original XY stage position
     Lsm5.Hardware.CpStages.PositionX = startX
     Lsm5.Hardware.CpStages.PositionY = startY
     
     StopButton.Enabled = False
-    StartButton.Enabled = True
+    'StartButton.Enabled = True
     
-    Close #intOutFile
+    Close #intOutFileMeg
+    Close #intOutFileUsr
             
     Set Track = Nothing
     Set laser = Nothing
@@ -203,6 +211,7 @@ EndLabel:
     If (OptionPNG8.Value Or OptionPNG12.Value) Then
     ' convert tifs to pngs using ImageMagick
         'MsgBox ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
+        'Antonin - this is an example shell call
         Shell ("mogrify -colorspace Gray -format png " + PathOfFolderForImagesText + "*.tif")
     ElseIf (OptionTiff8.Value Or OptionTiff12.Value) Then
         Shell ("mogrify -colorspace Gray -format tif " + PathOfFolderForImagesText + "*.tif")
@@ -755,46 +764,90 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                 
             If Not finishedHeader Then
                 'Write header for .meg
-                Print #intOutFile, "MegaCapture"
-                Print #intOutFile, "<ImageSessionData>"
-                Print #intOutFile, "Version" + sTab + "3.0"
-                Print #intOutFile, "ExperimentTitle" + sTab + ExperimentTitleText
-                Print #intOutFile, "ExperimentDescription" + sTab + ExperimentDescriptionText
-                Print #intOutFile, "TimeInterval" + sTab + TimeIntervalText
-                Print #intOutFile, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
-                Print #intOutFile, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX() * 10 ^ 6)) 'changed to microns by Paul
-                Print #intOutFile, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY() * 10 ^ 6))
-                Print #intOutFile, "VoxelSizeZ" + sTab + CStr((CDbl(ZSliceSpacingText) / 10 ^ 3))
-                Print #intOutFile, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
-                Print #intOutFile, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
-                Print #intOutFile, "DimensionPL" + sTab + "1"
+                Print #intOutFileMeg, "MegaCapture"
+                Print #intOutFileMeg, "<ImageSessionData>"
+                Print #intOutFileMeg, "Version" + sTab + "3.0"
+                Print #intOutFileMeg, "ExperimentTitle" + sTab + ExperimentTitleText
+                Print #intOutFileMeg, "ExperimentDescription" + sTab + ExperimentDescriptionText
+                Print #intOutFileMeg, "TimeInterval" + sTab + TimeIntervalText
+                Print #intOutFileMeg, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
+                Print #intOutFileMeg, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX() * 10 ^ 6)) 'changed to microns by Paul
+                Print #intOutFileMeg, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY() * 10 ^ 6))
+                Print #intOutFileMeg, "VoxelSizeZ" + sTab + CStr((CDbl(ZSliceSpacingText) / 10 ^ 3))
+                Print #intOutFileMeg, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
+                Print #intOutFileMeg, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
+                Print #intOutFileMeg, "DimensionPL" + sTab + "1"
+                'Right now GoFigure2 can only handle 1 row and 1 column.  The biologist output .txt file will still have the real number of rows and columns
                 If MarkAndFind Then
-                    Print #intOutFile, "DimensionCO" + sTab + Format(PositionsOfSpecimens, "0") 'Could also consider "00"
-                    Print #intOutFile, "DimensionRO" + sTab + "1"
+                    Print #intOutFileMeg, "DimensionCO" + sTab + "1"
+                    Print #intOutFileMeg, "DimensionRO" + sTab + "1"
                 Else
-                    Print #intOutFile, "DimensionCO" + sTab + ColumnsOfSpecimensText
-                    Print #intOutFile, "DimensionRO" + sTab + RowsOfSpecimensText
+                    Print #intOutFileMeg, "DimensionCO" + sTab + "1"
+                    Print #intOutFileMeg, "DimensionRO" + sTab + "1"
                 End If
-                Print #intOutFile, "DimensionZT" + sTab + "1"
-                Print #intOutFile, "DimensionYT" + sTab + YTilesPerSpecimenText
-                Print #intOutFile, "DimensionXT" + sTab + XTilesPerSpecimenText
-                Print #intOutFile, "DimensionTM" + sTab + TimePointsText
-                Print #intOutFile, "DimensionZS" + sTab + CStr(NumberOfZSlicesText)
-                Print #intOutFile, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
-                Print #intOutFile, ""
+                Print #intOutFileMeg, "DimensionZT" + sTab + "1"
+                Print #intOutFileMeg, "DimensionYT" + sTab + YTilesPerSpecimenText
+                Print #intOutFileMeg, "DimensionXT" + sTab + XTilesPerSpecimenText
+                Print #intOutFileMeg, "DimensionTM" + sTab + TimePointsText
+                Print #intOutFileMeg, "DimensionZS" + sTab + CStr(NumberOfZSlicesText)
+                Print #intOutFileMeg, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
+                'Print #intOutFileMeg, ""
+                For channel = 0 To RecordingDoc.GetDimensionChannels - 1
+                    'Pinhole = Lsm5.Hardware.CpPinholes.Diameter
+                    'amplifier.Select (channel)
+                    Print #intOutFileMeg, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
+                    ' TODO record channel name (not just dye)
+                    ' TODO should also record digital offset and wavelength
+                    'Print #intOutFileMeg, "Pinhole" + sTab + CStr(Pinhole)
+                    'TODO need to add laser attenuation for active lasers and amplifier gain/offset for current channel
+                    'Print #intOutFileMeg, "DigitalGain" + sTab + CStr(amplifier.Gain)
+                    'Set DetectionChannel = Lsm5.DsRecording.DetectionChannelOfActiveOrder(channel, SuccessChan)
+                    'Print #intOutFileMeg, "MasterGain" + sTab + CStr(DetectionChannel.DetectorGain)
+                    'Print #intOutFileMeg, "DyeName" + sTab + CStr(DetectionChannel.DyeName)
+                    'Print #intOutFileMeg, ""
+                Next channel
+                
+                'Write header for .txt
+                Print #intOutFileUsr, "MegaCapture"
+                Print #intOutFileUsr, "<ImageSessionData>"
+                Print #intOutFileUsr, "Version" + sTab + "3.0"
+                Print #intOutFileUsr, "ExperimentTitle" + sTab + ExperimentTitleText
+                Print #intOutFileUsr, "ExperimentDescription" + sTab + ExperimentDescriptionText
+                Print #intOutFileUsr, "TimeInterval" + sTab + TimeIntervalText
+                Print #intOutFileUsr, "Objective" + sTab + CStr(Lsm5.Hardware.CpObjectiveRevolver.Summary(1))
+                Print #intOutFileUsr, "VoxelSizeX" + sTab + CStr((RecordingDoc.VoxelSizeX() * 10 ^ 6)) 'changed to microns by Paul
+                Print #intOutFileUsr, "VoxelSizeY" + sTab + CStr((RecordingDoc.VoxelSizeY() * 10 ^ 6))
+                Print #intOutFileUsr, "VoxelSizeZ" + sTab + CStr((CDbl(ZSliceSpacingText) / 10 ^ 3))
+                Print #intOutFileUsr, "DimensionX" + sTab + CStr(RecordingDoc.GetDimensionX)
+                Print #intOutFileUsr, "DimensionY" + sTab + CStr(RecordingDoc.GetDimensionY)
+                Print #intOutFileUsr, "DimensionPL" + sTab + "1"
+                If MarkAndFind Then
+                    Print #intOutFileUsr, "DimensionCO" + sTab + Format(PositionsOfSpecimens, "0") 'Could also consider "00"
+                    Print #intOutFileUsr, "DimensionRO" + sTab + "1"
+                Else
+                    Print #intOutFileUsr, "DimensionCO" + sTab + ColumnsOfSpecimensText
+                    Print #intOutFileUsr, "DimensionRO" + sTab + RowsOfSpecimensText
+                End If
+                Print #intOutFileUsr, "DimensionZT" + sTab + "1"
+                Print #intOutFileUsr, "DimensionYT" + sTab + YTilesPerSpecimenText
+                Print #intOutFileUsr, "DimensionXT" + sTab + XTilesPerSpecimenText
+                Print #intOutFileUsr, "DimensionTM" + sTab + TimePointsText
+                Print #intOutFileUsr, "DimensionZS" + sTab + CStr(NumberOfZSlicesText)
+                Print #intOutFileUsr, "DimensionCH" + sTab + CStr(RecordingDoc.GetDimensionChannels)
+                Print #intOutFileUsr, ""
                 For channel = 0 To RecordingDoc.GetDimensionChannels - 1
                     Pinhole = Lsm5.Hardware.CpPinholes.Diameter
                     amplifier.Select (channel)
-                    Print #intOutFile, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
+                    Print #intOutFileUsr, "ChannelColor" + Format(channel, "00") + sTab + CStr(RecordingDoc.ChannelColor(channel))
                     ' TODO record channel name (not just dye)
                     ' TODO should also record digital offset and wavelength
-                    Print #intOutFile, "Pinhole" + sTab + CStr(Pinhole)
+                    Print #intOutFileUsr, "Pinhole" + sTab + CStr(Pinhole)
                     'TODO need to add laser attenuation for active lasers and amplifier gain/offset for current channel
-                    Print #intOutFile, "DigitalGain" + sTab + CStr(amplifier.Gain)
+                    Print #intOutFileUsr, "DigitalGain" + sTab + CStr(amplifier.Gain)
                     Set DetectionChannel = Lsm5.DsRecording.DetectionChannelOfActiveOrder(channel, SuccessChan)
-                    Print #intOutFile, "MasterGain" + sTab + CStr(DetectionChannel.DetectorGain)
-                    Print #intOutFile, "DyeName" + sTab + CStr(DetectionChannel.DyeName)
-                    Print #intOutFile, ""
+                    Print #intOutFileUsr, "MasterGain" + sTab + CStr(DetectionChannel.DetectorGain)
+                    Print #intOutFileUsr, "DyeName" + sTab + CStr(DetectionChannel.DyeName)
+                    Print #intOutFileUsr, ""
                 Next channel
                 
                 Dim strDepth, strFileType As String
@@ -812,12 +865,17 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                     strFileType = "TIF"
                 End If
                 
-                Print #intOutFile, "ChannelDepth" + sTab + strDepth
-                Print #intOutFile, "FileType" + sTab + strFileType
-                Print #intOutFile, "</ImageSessionData>"
-                Print #intOutFile, ""
-                Print #intOutFile, "------------------------------------------------------"
-                Print #intOutFile, ""
+                Print #intOutFileMeg, "ChannelDepth" + sTab + strDepth
+                Print #intOutFileMeg, "FileType" + sTab + strFileType
+                Print #intOutFileMeg, "</ImageSessionData>"
+                
+                Print #intOutFileUsr, "ChannelDepth" + sTab + strDepth
+                Print #intOutFileUsr, "FileType" + sTab + strFileType
+                Print #intOutFileUsr, "</ImageSessionData>"
+                Print #intOutFileUsr, ""
+                Print #intOutFileUsr, "------------------------------------------------------"
+                Print #intOutFileUsr, ""
+                
                 finishedHeader = True
             End If
         
@@ -891,16 +949,24 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
                     strName = strFilename + "-CH" + Format(channel, "00") + "-ZS" + Format(zInd, "0000") + strExtension
                     'has to be done in two separate lines like this so that images will be .tif at first no matter what
                     
-                    Print #intOutFile, "<Image>"
-                    Print #intOutFile, "Filename" + sTab + strName
-                    Print #intOutFile, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
-                    Print #intOutFile, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
-                    Print #intOutFile, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
-                    Print #intOutFile, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
-                    Print #intOutFile, "</Image>"
+                    Print #intOutFileMeg, "<Image>"
+                    Print #intOutFileMeg, "Filename" + sTab + strName
+                    Print #intOutFileMeg, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
+                    Print #intOutFileMeg, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
+                    Print #intOutFileMeg, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
+                    Print #intOutFileMeg, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
+                    Print #intOutFileMeg, "</Image>"
+                    
+                    Print #intOutFileUsr, "<Image>"
+                    Print #intOutFileUsr, "Filename" + sTab + strName
+                    Print #intOutFileUsr, "DateTime" + sTab + CStr(Format(Now(), "yyyy-mm-dd hh:nn:ss"))
+                    Print #intOutFileUsr, "StageX" + sTab + CStr(Lsm5.Hardware.CpStages.PositionX)
+                    Print #intOutFileUsr, "StageY" + sTab + CStr(Lsm5.Hardware.CpStages.PositionY)
+                    Print #intOutFileUsr, "StageZ" + sTab + CStr(Lsm5.Hardware.CpFocus.Position)
+                    Print #intOutFileUsr, "</Image>"
                 Next channel
-                Print #intOutFile, ""
-                
+                'Print #intOutFileMeg, ""
+                Print #intOutFileUsr, ""
                 'free up memory?
                 RecordingDoc.CloseAllWindows
                 Set RecordingDoc = Nothing
@@ -912,8 +978,8 @@ Public Sub AcquireTiledZStack(xPos As Double, yPos As Double, zPos As Double)
         Next XTilesIndex
     Next YTilesIndex
     
-    Print #intOutFile, "------------------------------------------------------"
-    Print #intOutFile, ""
+    Print #intOutFileUsr, "------------------------------------------------------"
+    Print #intOutFileUsr, ""
                 
 End Sub
 
